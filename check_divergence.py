@@ -227,6 +227,7 @@ def check_symbol(symbol, display_name, state):
 # MAIN
 # ============================================================
 def main():
+    send_email("Teszt email", "Ez egy teszt email a GitHub Actions-ből. Ha ezt látod, minden működik!")
     print(f"Futás: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     state = load_state()
 
