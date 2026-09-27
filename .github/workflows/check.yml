@@ -1,0 +1,43 @@
+name: H4 RSI Divergencia ellenőrzés
+
+on:
+  schedule:
+    # Minden 4 órában, 15 perccel a H4 gyertya zárása után (UTC)
+    - cron: "15 0,4,8,12,16,20 * * *"
+  workflow_dispatch:   # kézi indítás is lehetséges
+
+permissions:
+  contents: write      # state.json visszaíráshoz kell
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Python telepítés
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Függőségek telepítése
+        run: pip install -r requirements.txt
+
+      - name: Divergencia ellenőrzés futtatása
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+        run: python check_divergence.py
+
+      - name: State fájl mentése
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f state.json ]; then
+            git add state.json
+            git diff --cached --quiet || git commit -m "state update $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
