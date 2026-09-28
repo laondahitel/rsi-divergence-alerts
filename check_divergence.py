@@ -88,7 +88,7 @@ def download_4h(symbol):
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         params = {
             "interval": "15m",
-            "range": "5d",
+            "range": "1mo",
             "includePrePost": "true",
         }
         headers = {
