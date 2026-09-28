@@ -27,7 +27,9 @@ STATE_FILE = "state.json"
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
-EMAIL_TO   = os.environ.get("EMAIL_TO", GMAIL_USER)
+EMAIL_TO_RAW = os.environ.get("EMAIL_TO", GMAIL_USER or "")
+# Több címzett: vesszővel vagy pontosvesszővel elválasztva
+EMAIL_TO_LIST = [a.strip() for a in EMAIL_TO_RAW.replace(";", ",").split(",") if a.strip()]
 
 # ============================================================
 # UTIL
@@ -49,16 +51,19 @@ def send_email(subject, body):
     if not GMAIL_USER or not GMAIL_PASS:
         print("⚠ Email nincs konfigurálva (GMAIL_USER / GMAIL_PASS hiányzik).")
         return
+    if not EMAIL_TO_LIST:
+        print("⚠ Nincs érvényes címzett az EMAIL_TO secret-ben.")
+        return
     try:
         msg = MIMEText(body, "plain", "utf-8")
         msg["Subject"] = Header(subject, "utf-8")
         msg["From"]    = GMAIL_USER
-        msg["To"]      = EMAIL_TO
+        msg["To"]      = ", ".join(EMAIL_TO_LIST)
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_USER, GMAIL_PASS)
-            server.send_message(msg)
-        print(f"✅ Email elküldve: {subject}")
+            server.send_message(msg, from_addr=GMAIL_USER, to_addrs=EMAIL_TO_LIST)
+        print(f"✅ Email elküldve: {subject} → {EMAIL_TO_LIST}")
     except Exception as e:
         print(f"❌ Email küldés hiba: {e}")
 
@@ -147,6 +152,8 @@ def check_symbol(symbol, display_name, state):
         print(f"⚠ Kevés adat: {symbol}")
         return
 
+    print(f"Gyertyák száma: {len(df)}  |  utolsó lezárt: {df.index[-1]}")
+
     df["RSI"] = compute_rsi(df["Close"], RSI_PERIOD)
     ph, pl = find_pivots(df, PIVOT_LEN, PIVOT_LEN)
 
@@ -155,80 +162,92 @@ def check_symbol(symbol, display_name, state):
     pivot_lows  = [(df.index[i], df["Low"].iloc[i],  df["RSI"].iloc[i])
                    for i in range(len(df)) if pl[i]]
 
+    print(f"Pivot high-ok: {len(pivot_highs)}  |  pivot low-ok: {len(pivot_lows)}")
+
+    if pivot_lows:
+        print(f"  Utolsó pivot low:  {pivot_lows[-1][0]}  ár={pivot_lows[-1][1]:.4f}  RSI={pivot_lows[-1][2]:.2f}")
+    if pivot_highs:
+        print(f"  Utolsó pivot high: {pivot_highs[-1][0]}  ár={pivot_highs[-1][1]:.4f}  RSI={pivot_highs[-1][2]:.2f}")
+
     if len(pivot_lows) < 2 and len(pivot_highs) < 2:
         print(f"Nincs elég pivot.")
         return
 
-    last_bar_time = df.index[-1]
-    last_confirmed_time = last_bar_time - pd.Timedelta(hours=4 * PIVOT_LEN)
+    key_buy  = f"{symbol}_last_buy_pivot"
+    key_sell = f"{symbol}_last_sell_pivot"
 
-    key_buy  = f"{symbol}_last_buy_time"
-    key_sell = f"{symbol}_last_sell_time"
-
+    # ---- BULLISH divergencia ----
     if len(pivot_lows) >= 2:
         curr = pivot_lows[-1]
         prev = pivot_lows[-2]
-        if curr[0] == last_confirmed_time:
+
+        pivot_id = curr[0].isoformat()
+        already_notified = (state.get(key_buy) == pivot_id)
+
+        if not already_notified:
             price_ll = curr[1] < prev[1]
             rsi_hl   = curr[2] > prev[2]
             price_ok = (prev[1] - curr[1]) >= MIN_PRICE_DIFF
             rsi_ok   = (curr[2] - prev[2]) >= MIN_RSI_DIFF
 
+            print(f"BUY check: price_ll={price_ll}  rsi_hl={rsi_hl}  price_diff={prev[1]-curr[1]:.4f}  rsi_diff={curr[2]-prev[2]:.2f}")
+
             if price_ll and rsi_hl and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
-                if state.get(key_buy) != curr_time_str:
-                    subject = f"{display_name} VÉTELI lehetőség H4 RSI Divergencia"
-                    body = (
-                        f"{display_name} VÉTELI lehetőség H4 RSI Divergencia\n\n"
-                        f"Symbol: {symbol}\n"
-                        f"Idő: {curr_time_str}\n\n"
-                        f"Előző pivot low: {prev[1]:.4f}  RSI: {prev[2]:.2f}\n"
-                        f"Mostani pivot low: {curr[1]:.4f}  RSI: {curr[2]:.2f}\n"
-                        f"Ár különbség: {prev[1] - curr[1]:.4f}\n"
-                        f"RSI különbség: {curr[2] - prev[2]:.2f}\n"
-                    )
-                    send_email(subject, body)
-                    state[key_buy] = curr_time_str
-                else:
-                    print(f"Már jeleztük ezt a BUY divergenciát ({curr_time_str}).")
-            else:
-                print(f"Nincs BUY divergencia a legutóbbi pivot low-nál.")
+                subject = f"{display_name} VÉTELI lehetőség H4 RSI Divergencia"
+                body = (
+                    f"{display_name} VÉTELI lehetőség H4 RSI Divergencia\n\n"
+                    f"Symbol: {symbol}\n"
+                    f"Pivot idő: {curr_time_str}\n\n"
+                    f"Előző pivot low: {prev[1]:.4f}  RSI: {prev[2]:.2f}  ({prev[0]})\n"
+                    f"Mostani pivot low: {curr[1]:.4f}  RSI: {curr[2]:.2f}  ({curr[0]})\n"
+                    f"Ár különbség: {prev[1] - curr[1]:.4f}\n"
+                    f"RSI különbség: {curr[2] - prev[2]:.2f}\n"
+                )
+                send_email(subject, body)
+                state[key_buy] = pivot_id
+        else:
+            print(f"BUY pivot már jelezve korábban: {curr[0]}")
 
+    # ---- BEARISH divergencia ----
     if len(pivot_highs) >= 2:
         curr = pivot_highs[-1]
         prev = pivot_highs[-2]
-        if curr[0] == last_confirmed_time:
+
+        pivot_id = curr[0].isoformat()
+        already_notified = (state.get(key_sell) == pivot_id)
+
+        if not already_notified:
             price_hh = curr[1] > prev[1]
             rsi_lh   = curr[2] < prev[2]
             price_ok = (curr[1] - prev[1]) >= MIN_PRICE_DIFF
             rsi_ok   = (prev[2] - curr[2]) >= MIN_RSI_DIFF
 
+            print(f"SELL check: price_hh={price_hh}  rsi_lh={rsi_lh}  price_diff={curr[1]-prev[1]:.4f}  rsi_diff={prev[2]-curr[2]:.2f}")
+
             if price_hh and rsi_lh and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
-                if state.get(key_sell) != curr_time_str:
-                    subject = f"{display_name} ELADÁSI lehetőség H4 RSI Divergencia"
-                    body = (
-                        f"{display_name} ELADÁSI lehetőség H4 RSI Divergencia\n\n"
-                        f"Symbol: {symbol}\n"
-                        f"Idő: {curr_time_str}\n\n"
-                        f"Előző pivot high: {prev[1]:.4f}  RSI: {prev[2]:.2f}\n"
-                        f"Mostani pivot high: {curr[1]:.4f}  RSI: {curr[2]:.2f}\n"
-                        f"Ár különbség: {curr[1] - prev[1]:.4f}\n"
-                        f"RSI különbség: {prev[2] - curr[2]:.2f}\n"
-                    )
-                    send_email(subject, body)
-                    state[key_sell] = curr_time_str
-                else:
-                    print(f"Már jeleztük ezt a SELL divergenciát ({curr_time_str}).")
-            else:
-                print(f"Nincs SELL divergencia a legutóbbi pivot high-nál.")
+                subject = f"{display_name} ELADÁSI lehetőség H4 RSI Divergencia"
+                body = (
+                    f"{display_name} ELADÁSI lehetőség H4 RSI Divergencia\n\n"
+                    f"Symbol: {symbol}\n"
+                    f"Pivot idő: {curr_time_str}\n\n"
+                    f"Előző pivot high: {prev[1]:.4f}  RSI: {prev[2]:.2f}  ({prev[0]})\n"
+                    f"Mostani pivot high: {curr[1]:.4f}  RSI: {curr[2]:.2f}  ({curr[0]})\n"
+                    f"Ár különbség: {curr[1] - prev[1]:.4f}\n"
+                    f"RSI különbség: {prev[2] - curr[2]:.2f}\n"
+                )
+                send_email(subject, body)
+                state[key_sell] = pivot_id
+        else:
+            print(f"SELL pivot már jelezve korábban: {curr[0]}")
 
 # ============================================================
 # MAIN
 # ============================================================
 def main():
-    send_email("Teszt email", "Ez egy teszt email a GitHub Actions-ből. Ha ezt látod, minden működik!")
     print(f"Futás: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Címzettek: {EMAIL_TO_LIST}")
     state = load_state()
 
     for symbol, name in SYMBOLS.items():
