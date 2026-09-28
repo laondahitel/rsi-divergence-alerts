@@ -85,11 +85,17 @@ def compute_rsi(series, period=14):
 # ============================================================
 def download_4h(symbol):
     try:
-        ticker = yf.Ticker(symbol)
         df = None
         for attempt in range(3):
             try:
-                df = ticker.history(period="90d", interval="1h", auto_adjust=False)
+                df = yf.download(
+                    symbol,
+                    period="60d",
+                    interval="15m",
+                    progress=False,
+                    auto_adjust=False,
+                    threads=False,
+                )
             except Exception as e:
                 print(f"⚠ Próbálkozás {attempt+1} hiba: {e}")
                 df = None
@@ -103,13 +109,6 @@ def download_4h(symbol):
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-            
-        print(f"🔍 DEBUG | Nyers adat sorok: {len(df)}")
-        print(f"🔍 DEBUG | Első sor: {df.index[0]}")
-        print(f"🔍 DEBUG | Utolsó sor: {df.index[-1]}")
-        print(f"🔍 DEBUG | Utolsó close: {df['Close'].iloc[-1]:.4f}")
-        print(f"🔍 DEBUG | Időzóna: {df.index.tz}")
-        
 
         cols_needed = ["Open", "High", "Low", "Close", "Volume"]
         for c in cols_needed:
@@ -118,6 +117,11 @@ def download_4h(symbol):
                 return None
 
         df = df[cols_needed].dropna()
+
+        # DEBUG
+        print(f"🔍 DEBUG | Nyers sorok: {len(df)}")
+        print(f"🔍 DEBUG | Utolsó sor: {df.index[-1]}")
+        print(f"🔍 DEBUG | Utolsó close: {df['Close'].iloc[-1]:.4f}")
 
         df4 = df.resample("4h").agg({
             "Open":   "first",
@@ -130,8 +134,10 @@ def download_4h(symbol):
         now_utc = pd.Timestamp.now(tz="UTC")
         if df4.index.tz is None:
             df4.index = df4.index.tz_localize("UTC")
-        df4 = df4[df4.index + pd.Timedelta(hours=4) <= now_utc]
+        else:
+            df4.index = df4.index.tz_convert("UTC")
 
+        df4 = df4[df4.index + pd.Timedelta(hours=4) <= now_utc]
         return df4
     except Exception as e:
         print(f"⚠ Hiba a letöltésnél ({symbol}): {e}")
