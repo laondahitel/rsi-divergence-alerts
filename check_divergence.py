@@ -13,7 +13,7 @@ import numpy as np
 # CONFIG
 # ============================================================
 SYMBOLS = {
-    "NQ=F": "Nasdaq",
+    "^NDX": "Nasdaq",
     # "6E=F": "EUR",
     # "6B=F": "GBP",
 }
