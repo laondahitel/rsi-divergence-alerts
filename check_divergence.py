@@ -14,7 +14,7 @@ import numpy as np
 # CONFIG
 # ============================================================
 SYMBOLS = {
-    "^NDX": "Nasdaq",
+    "NQ=F": "Nasdaq",
 }
 
 RSI_PERIOD     = 14
