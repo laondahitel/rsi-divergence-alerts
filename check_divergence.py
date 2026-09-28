@@ -86,8 +86,16 @@ def compute_rsi(series, period=14):
 # ADAT LETÖLTÉS ÉS 4H RESAMPLE
 # ============================================================
 def download_4h(symbol):
+    import requests
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0.0.0 Safari/537.36"
+    })
     df = yf.download(symbol, interval="1h", period="90d",
-                     progress=False, auto_adjust=False)
+                     progress=False, auto_adjust=False,
+                     session=session)
 
     if df is None or df.empty:
         print(f"⚠ Nincs adat: {symbol}")
