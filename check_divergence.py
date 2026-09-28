@@ -1,26 +1,25 @@
 import os
 import json
 import smtplib
+import time
 from email.mime.text import MIMEText
 from email.header import Header
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
 
-# ===========================================================
+# ============================================================
 # CONFIG
 # ============================================================
 SYMBOLS = {
     "^NDX": "Nasdaq",
-    # "6E=F": "EUR",
-    # "6B=F": "GBP",
 }
 
-RSI_PERIOD    = 14
-PIVOT_LEN     = 5
-MIN_RSI_DIFF  = 2.0
+RSI_PERIOD     = 14
+PIVOT_LEN      = 5
+MIN_RSI_DIFF   = 2.0
 MIN_PRICE_DIFF = 0.0
 
 STATE_FILE = "state.json"
@@ -28,7 +27,6 @@ STATE_FILE = "state.json"
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
 EMAIL_TO_RAW = os.environ.get("EMAIL_TO", GMAIL_USER or "")
-# Több címzett: vesszővel vagy pontosvesszővel elválasztva
 EMAIL_TO_LIST = [a.strip() for a in EMAIL_TO_RAW.replace(";", ",").split(",") if a.strip()]
 
 # ============================================================
@@ -86,40 +84,51 @@ def compute_rsi(series, period=14):
 # ADAT LETÖLTÉS ÉS 4H RESAMPLE
 # ============================================================
 def download_4h(symbol):
-    import requests
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36"
-    })
-    df = yf.download(symbol, interval="1h", period="90d",
-                     progress=False, auto_adjust=False,
-                     session=session)
+    try:
+        ticker = yf.Ticker(symbol)
+        df = None
+        for attempt in range(3):
+            try:
+                df = ticker.history(period="90d", interval="1h", auto_adjust=False)
+            except Exception as e:
+                print(f"⚠ Próbálkozás {attempt+1} hiba: {e}")
+                df = None
+            if df is not None and not df.empty:
+                break
+            time.sleep(2)
 
-    if df is None or df.empty:
-        print(f"⚠ Nincs adat: {symbol}")
+        if df is None or df.empty:
+            print(f"⚠ Nincs adat: {symbol}")
+            return None
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        cols_needed = ["Open", "High", "Low", "Close", "Volume"]
+        for c in cols_needed:
+            if c not in df.columns:
+                print(f"⚠ Hiányzó oszlop: {c}")
+                return None
+
+        df = df[cols_needed].dropna()
+
+        df4 = df.resample("4h").agg({
+            "Open":   "first",
+            "High":   "max",
+            "Low":    "min",
+            "Close":  "last",
+            "Volume": "sum",
+        }).dropna()
+
+        now_utc = pd.Timestamp.now(tz="UTC")
+        if df4.index.tz is None:
+            df4.index = df4.index.tz_localize("UTC")
+        df4 = df4[df4.index + pd.Timedelta(hours=4) <= now_utc]
+
+        return df4
+    except Exception as e:
+        print(f"⚠ Hiba a letöltésnél ({symbol}): {e}")
         return None
-
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-
-    df4 = df.resample("4h").agg({
-        "Open":   "first",
-        "High":   "max",
-        "Low":    "min",
-        "Close":  "last",
-        "Volume": "sum",
-    }).dropna()
-
-    now_utc = pd.Timestamp.now(tz="UTC")
-    if df4.index.tz is None:
-        df4.index = df4.index.tz_localize("UTC")
-    df4 = df4[df4.index + pd.Timedelta(hours=4) <= now_utc]
-
-    return df4
 
 # ============================================================
 # PIVOT DETEKTÁLÁS (ZigZag-szerű)
@@ -202,9 +211,9 @@ def check_symbol(symbol, display_name, state):
 
             if price_ll and rsi_hl and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
-                subject = f"{display_name} Nasdaq , LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia"
+                subject = "Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia"
                 body = (
-                    f"{display_name} Nasdaq , LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia\n\n"
+                    f"Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia\n\n"
                     f"Symbol: {symbol}\n"
                     f"Pivot idő: {curr_time_str}\n\n"
                     f"Előző pivot low: {prev[1]:.4f}  RSI: {prev[2]:.2f}  ({prev[0]})\n"
@@ -235,9 +244,9 @@ def check_symbol(symbol, display_name, state):
 
             if price_hh and rsi_lh and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
-                subject = f"{display_name} Nasdaq , LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia"
+                subject = "Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia"
                 body = (
-                    f"{display_name} Nasdaq , LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia\n\n"
+                    f"Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia\n\n"
                     f"Symbol: {symbol}\n"
                     f"Pivot idő: {curr_time_str}\n\n"
                     f"Előző pivot high: {prev[1]:.4f}  RSI: {prev[2]:.2f}  ({prev[0]})\n"
