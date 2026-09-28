@@ -23,7 +23,9 @@ jobs:
           python-version: "3.11"
 
       - name: Függőségek telepítése
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install --no-cache-dir --retries 5 --timeout 60 -r requirements.txt
 
       - name: Divergencia ellenőrzés futtatása
         env:
