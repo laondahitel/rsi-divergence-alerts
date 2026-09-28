@@ -1,3 +1,72 @@
+# ═══════════════════════════════════════════════════════════════════
+#  NASDAQ H4 RSI DIVERGENCIA — EMAIL ÉRTESÍTÉS
+# ═══════════════════════════════════════════════════════════════════
+#
+#  📧 ÚJ EMAIL CÍM HOZZÁADÁSA (a következő hónapokban):
+#  ─────────────────────────────────────────────────────
+#  Menj erre a linkre:
+#  https://github.com/laondahitel/rsi-divergence-alerts/settings/secrets/actions
+#
+#  1. Keresd meg az "EMAIL_TO" secret-et
+#  2. Kattints az "Update" gombra
+#  3. Írd be a címeket VESSZŐVEL vagy PONTOSVESSZŐVEL elválasztva:
+#
+#     laonda.bt@hotmail.com;fodor.edina7@hotmail.com;uj.cim@gmail.com
+#
+#  4. "Update secret" gomb
+#
+#  Ennyi — a következő futásnál már minden címre megy.
+#
+# ═══════════════════════════════════════════════════════════════════
+#
+#  🤖 ÚJ AI BESZÉLGETÉSBEN HIBA ESETÉN:
+#  ─────────────────────────────────────────────────────
+#  Ha valami nem működik (nincs email, hibaüzenet, API változás):
+#
+#  1. Nyisd meg a legfrissebb GitHub Actions futást:
+#     https://github.com/laondahitel/rsi-divergence-alerts/actions
+#
+#  2. Kattints a legfelső futásra → "check" job → a piros X-es lépésre
+#
+#  3. MÁSOLD KI a hibaüzenetet (utolsó 15-20 sor a logból)
+#
+#  4. Az új AI beszélgetésben ezt írd:
+#     ─────────────────────────────────────
+#     "Ez egy GitHub Actions Python script, ami Yahoo Finance API-ból
+#      olvassa az NQ=F (Nasdaq futures) 15 perces gyertyáit, 4 órásra
+#      resampleli, és RSI divergenciát keres. Ha talál, Gmail-en
+#      emailt küld.
+#
+#      A hibaüzenet a logból:
+#      [IDE MÁSOLD BE A HIBAÜZENETET]
+#
+#      Az aktuális kód itt van:
+#      [IDE MÁSOLD BE A FÁJL TARTALMÁT]
+#
+#      Kérlek javítsd a hibát!"
+#     ─────────────────────────────────────
+#
+#  5. Ha az AI kérdez, mik a fájlok:
+#     - check_divergence.py  → ez a fő script (ez a fájl)
+#     - requirements.txt     → pandas, numpy, requests
+#     - check.yml            → GitHub Actions ütemező
+#     - state.json           → memória (melyik pivotot jeleztük)
+#
+# ═══════════════════════════════════════════════════════════════════
+#
+#  🛠  MI MIT CSINÁL — GYORS ÁTTEKINTÉS:
+#  ─────────────────────────────────────────────────────
+#  - SYMBOLS          → melyik szimbólumot figyeljük (NQ=F)
+#  - RSI_PERIOD       → RSI időszak (14)
+#  - PIVOT_LEN        → hány gyertya balra/jobbra a pivot-hoz (5)
+#  - MIN_RSI_DIFF     → minimum RSI különbség divergenciához (2.0)
+#  - range="1mo"      → 30 nap adat lekérése a Yahoo-tól
+#  - interval="15m"   → 15 perces gyertyák (ebből lesz 4H resample)
+#  - check_symbol()   → a fő logika: pivot keresés + divergencia
+#  - send_email()     → Gmail SMTP küldés
+#
+# ═══════════════════════════════════════════════════════════════════
+
 import os
 import json
 import smtplib
@@ -123,10 +192,11 @@ def download_4h(symbol):
             print(f"⚠ Üres adat: {symbol}")
             return None
 
-        # DEBUG
-        print(f"🔍 DEBUG | Nyers sorok: {len(df)}")
-        print(f"🔍 DEBUG | Utolsó sor:  {df.index[-1]}")
-        print(f"🔍 DEBUG | Utolsó close: {df['Close'].iloc[-1]:.4f}")
+        # ── DEBUG — szükség esetén vedd le a # jelet ─────────────
+        # print(f"🔍 DEBUG | Nyers sorok: {len(df)}")
+        # print(f"🔍 DEBUG | Utolsó sor:  {df.index[-1]}")
+        # print(f"🔍 DEBUG | Utolsó close: {df['Close'].iloc[-1]:.4f}")
+        # ─────────────────────────────────────────────────────────
 
         # 4h resample
         df4 = df.resample("4h").agg({
@@ -177,14 +247,14 @@ def find_pivots(df, left, right):
 # DIVERGENCIA LOGIKA
 # ============================================================
 def check_symbol(symbol, display_name, state):
-    print(f"\n=== {symbol} ({display_name}) ===")
+    # print(f"\n=== {symbol} ({display_name}) ===")
 
     df = download_4h(symbol)
-    if df is None or len(df) < 30:
+    if df is None or len(df) < 15:
         print(f"⚠ Kevés adat: {symbol}")
         return
 
-    print(f"Gyertyák száma: {len(df)}  |  utolsó lezárt: {df.index[-1]}")
+    # print(f"Gyertyák száma: {len(df)}  |  utolsó lezárt: {df.index[-1]}")
 
     df["RSI"] = compute_rsi(df["Close"], RSI_PERIOD)
     ph, pl = find_pivots(df, PIVOT_LEN, PIVOT_LEN)
@@ -194,15 +264,17 @@ def check_symbol(symbol, display_name, state):
     pivot_lows  = [(df.index[i], df["Low"].iloc[i],  df["RSI"].iloc[i])
                    for i in range(len(df)) if pl[i]]
 
-    print(f"Pivot high-ok: {len(pivot_highs)}  |  pivot low-ok: {len(pivot_lows)}")
+    # print(f"Pivot high-ok: {len(pivot_highs)}  |  pivot low-ok: {len(pivot_lows)}")
 
-    if pivot_lows:
-        print(f"  Utolsó pivot low:  {pivot_lows[-1][0]}  ár={pivot_lows[-1][1]:.4f}  RSI={pivot_lows[-1][2]:.2f}")
-    if pivot_highs:
-        print(f"  Utolsó pivot high: {pivot_highs[-1][0]}  ár={pivot_highs[-1][1]:.4f}  RSI={pivot_highs[-1][2]:.2f}")
+    # ── Részletes pivot info (opcionális) ─────────────────────
+    # if pivot_lows:
+    #     print(f"  Utolsó pivot low:  {pivot_lows[-1][0]}  ár={pivot_lows[-1][1]:.4f}  RSI={pivot_lows[-1][2]:.2f}")
+    # if pivot_highs:
+    #     print(f"  Utolsó pivot high: {pivot_highs[-1][0]}  ár={pivot_highs[-1][1]:.4f}  RSI={pivot_highs[-1][2]:.2f}")
+    # ─────────────────────────────────────────────────────────
 
     if len(pivot_lows) < 2 and len(pivot_highs) < 2:
-        print(f"Nincs elég pivot.")
+        # print(f"Nincs elég pivot.")
         return
 
     key_buy  = f"{symbol}_last_buy_pivot"
@@ -222,7 +294,7 @@ def check_symbol(symbol, display_name, state):
             price_ok = (prev[1] - curr[1]) >= MIN_PRICE_DIFF
             rsi_ok   = (curr[2] - prev[2]) >= MIN_RSI_DIFF
 
-            print(f"BUY check: price_ll={price_ll}  rsi_hl={rsi_hl}  price_diff={prev[1]-curr[1]:.4f}  rsi_diff={curr[2]-prev[2]:.2f}")
+            # print(f"BUY check: price_ll={price_ll}  rsi_hl={rsi_hl}  price_diff={prev[1]-curr[1]:.4f}  rsi_diff={curr[2]-prev[2]:.2f}")
 
             if price_ll and rsi_hl and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
@@ -238,8 +310,8 @@ def check_symbol(symbol, display_name, state):
                 )
                 send_email(subject, body)
                 state[key_buy] = pivot_id
-        else:
-            print(f"BUY pivot már jelezve korábban: {curr[0]}")
+        # else:
+        #     print(f"BUY pivot már jelezve korábban: {curr[0]}")
 
     # ---- BEARISH divergencia ----
     if len(pivot_highs) >= 2:
@@ -255,7 +327,7 @@ def check_symbol(symbol, display_name, state):
             price_ok = (curr[1] - prev[1]) >= MIN_PRICE_DIFF
             rsi_ok   = (prev[2] - curr[2]) >= MIN_RSI_DIFF
 
-            print(f"SELL check: price_hh={price_hh}  rsi_lh={rsi_lh}  price_diff={curr[1]-prev[1]:.4f}  rsi_diff={prev[2]-curr[2]:.2f}")
+            # print(f"SELL check: price_hh={price_hh}  rsi_lh={rsi_lh}  price_diff={curr[1]-prev[1]:.4f}  rsi_diff={prev[2]-curr[2]:.2f}")
 
             if price_hh and rsi_lh and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
@@ -271,8 +343,8 @@ def check_symbol(symbol, display_name, state):
                 )
                 send_email(subject, body)
                 state[key_sell] = pivot_id
-        else:
-            print(f"SELL pivot már jelezve korábban: {curr[0]}")
+        # else:
+        #     print(f"SELL pivot már jelezve korábban: {curr[0]}")
 
 # ============================================================
 # MAIN
@@ -289,7 +361,7 @@ def main():
             print(f"❌ Hiba {symbol}-nál: {e}")
 
     save_state(state)
-    print("\n✅ Kész.")
+    print("✅ Kész.")
 
 if __name__ == "__main__":
     main()
