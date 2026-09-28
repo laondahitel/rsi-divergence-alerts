@@ -14,8 +14,8 @@ import numpy as np
 # ============================================================
 SYMBOLS = {
     "NQ=F": "Nasdaq",
-    "6E=F": "EUR",
-    "6B=F": "GBP",
+    # "6E=F": "EUR",
+    # "6B=F": "GBP",
 }
 
 RSI_PERIOD    = 14
@@ -194,9 +194,9 @@ def check_symbol(symbol, display_name, state):
 
             if price_ll and rsi_hl and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
-                subject = f"{display_name} VÉTELI lehetőség H4 RSI Divergencia"
+                subject = f"{display_name} Nasdaq , LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia"
                 body = (
-                    f"{display_name} VÉTELI lehetőség H4 RSI Divergencia\n\n"
+                    f"{display_name} Nasdaq , LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia\n\n"
                     f"Symbol: {symbol}\n"
                     f"Pivot idő: {curr_time_str}\n\n"
                     f"Előző pivot low: {prev[1]:.4f}  RSI: {prev[2]:.2f}  ({prev[0]})\n"
@@ -227,9 +227,9 @@ def check_symbol(symbol, display_name, state):
 
             if price_hh and rsi_lh and price_ok and rsi_ok:
                 curr_time_str = curr[0].strftime("%Y-%m-%d %H:%M UTC")
-                subject = f"{display_name} ELADÁSI lehetőség H4 RSI Divergencia"
+                subject = f"{display_name} Nasdaq , LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia"
                 body = (
-                    f"{display_name} ELADÁSI lehetőség H4 RSI Divergencia\n\n"
+                    f"{display_name} Nasdaq , LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia\n\n"
                     f"Symbol: {symbol}\n"
                     f"Pivot idő: {curr_time_str}\n\n"
                     f"Előző pivot high: {prev[1]:.4f}  RSI: {prev[2]:.2f}  ({prev[0]})\n"
