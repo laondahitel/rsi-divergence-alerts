@@ -103,6 +103,13 @@ def download_4h(symbol):
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+            
+        print(f"🔍 DEBUG | Nyers adat sorok: {len(df)}")
+        print(f"🔍 DEBUG | Első sor: {df.index[0]}")
+        print(f"🔍 DEBUG | Utolsó sor: {df.index[-1]}")
+        print(f"🔍 DEBUG | Utolsó close: {df['Close'].iloc[-1]:.4f}")
+        print(f"🔍 DEBUG | Időzóna: {df.index.tz}")
+        
 
         cols_needed = ["Open", "High", "Low", "Close", "Volume"]
         for c in cols_needed:
