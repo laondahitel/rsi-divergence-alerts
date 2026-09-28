@@ -2,11 +2,11 @@ import os
 import json
 import smtplib
 import time
+import requests
 from email.mime.text import MIMEText
 from email.header import Header
 from datetime import datetime, timezone
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 
@@ -81,48 +81,54 @@ def compute_rsi(series, period=14):
     return rsi
 
 # ============================================================
-# ADAT LETÖLTÉS ÉS 4H RESAMPLE
+# ADAT LETÖLTÉS — KÖZVETLEN YAHOO API
 # ============================================================
 def download_4h(symbol):
     try:
-        df = None
-        for attempt in range(3):
-            try:
-                df = yf.download(
-                    symbol,
-                    period="60d",
-                    interval="15m",
-                    progress=False,
-                    auto_adjust=False,
-                    threads=False,
-                )
-            except Exception as e:
-                print(f"⚠ Próbálkozás {attempt+1} hiba: {e}")
-                df = None
-            if df is not None and not df.empty:
-                break
-            time.sleep(2)
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        params = {
+            "interval": "15m",
+            "range": "5d",
+            "includePrePost": "true",
+        }
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
 
-        if df is None or df.empty:
-            print(f"⚠ Nincs adat: {symbol}")
+        r = requests.get(url, params=params, headers=headers, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+
+        result = data["chart"]["result"][0]
+        timestamps = result.get("timestamp", [])
+        if not timestamps:
+            print(f"⚠ Nincs timestamp a válaszban: {symbol}")
             return None
 
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+        quote = result["indicators"]["quote"][0]
+        df = pd.DataFrame({
+            "Open":   quote["open"],
+            "High":   quote["high"],
+            "Low":    quote["low"],
+            "Close":  quote["close"],
+            "Volume": quote["volume"],
+        }, index=pd.to_datetime(timestamps, unit="s", utc=True))
 
-        cols_needed = ["Open", "High", "Low", "Close", "Volume"]
-        for c in cols_needed:
-            if c not in df.columns:
-                print(f"⚠ Hiányzó oszlop: {c}")
-                return None
-
-        df = df[cols_needed].dropna()
+        df = df.dropna()
+        if df.empty:
+            print(f"⚠ Üres adat: {symbol}")
+            return None
 
         # DEBUG
         print(f"🔍 DEBUG | Nyers sorok: {len(df)}")
-        print(f"🔍 DEBUG | Utolsó sor: {df.index[-1]}")
+        print(f"🔍 DEBUG | Utolsó sor:  {df.index[-1]}")
         print(f"🔍 DEBUG | Utolsó close: {df['Close'].iloc[-1]:.4f}")
 
+        # 4h resample
         df4 = df.resample("4h").agg({
             "Open":   "first",
             "High":   "max",
@@ -132,12 +138,8 @@ def download_4h(symbol):
         }).dropna()
 
         now_utc = pd.Timestamp.now(tz="UTC")
-        if df4.index.tz is None:
-            df4.index = df4.index.tz_localize("UTC")
-        else:
-            df4.index = df4.index.tz_convert("UTC")
-
         df4 = df4[df4.index + pd.Timedelta(hours=4) <= now_utc]
+
         return df4
     except Exception as e:
         print(f"⚠ Hiba a letöltésnél ({symbol}): {e}")
