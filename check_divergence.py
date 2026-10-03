@@ -35,7 +35,7 @@ CLOSE_BUFFER = pd.Timedelta(minutes=15)
 MAX_DATA_AGE = pd.Timedelta(hours=5)
 
 STATE_FILE = "state.json"
-CURRENT_STATE_VERSION = 2
+CURRENT_STATE_VERSION = 3   # v3: RSI Close (nem High/Low)
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
@@ -228,19 +228,19 @@ def check_symbol(symbol, display_name, state):
         )
         return
 
-    # ── RSI-k: külön a High és a Low sorozatra ─────────────────
-    df["RSI_high"] = compute_rsi(df["High"], RSI_PERIOD)
-    df["RSI_low"]  = compute_rsi(df["Low"],  RSI_PERIOD)
+    # ── RSI Close (egyetlen sorozat) ───────────────────────────
+    df["RSI"] = compute_rsi(df["Close"], RSI_PERIOD)
 
     ph, pl = find_pivots(df, PIVOT_LEN, PIVOT_LEN)
     n = len(df)
 
+    # Pivot pozíció: High/Low. RSI érték a pivot gyertya Close-jából.
     confirmed_highs = [
-        (df.index[i], float(df["High"].iloc[i]), float(df["RSI_high"].iloc[i]))
+        (df.index[i], float(df["High"].iloc[i]), float(df["RSI"].iloc[i]))
         for i in range(n) if ph[i]
     ]
     confirmed_lows = [
-        (df.index[i], float(df["Low"].iloc[i]), float(df["RSI_low"].iloc[i]))
+        (df.index[i], float(df["Low"].iloc[i]), float(df["RSI"].iloc[i]))
         for i in range(n) if pl[i]
     ]
 
@@ -260,10 +260,14 @@ def check_symbol(symbol, display_name, state):
     merge(saved_highs, confirmed_highs)
     merge(saved_lows,  confirmed_lows)
 
+    # ── Friss (legutolsó lezárt) H4 gyertya ────────────────────
+    # A wick (Low/High) számít a pivot-átlépéshez.
+    # A Close-t csak az RSI-hez használjuk.
+    # Ha a wick átlépte a pivot szintet, JELEZÜNK – akkor is,
+    # ha a Close visszament a pivot fölé/alá.
     last_high  = float(df["High"].iloc[-1])
     last_low   = float(df["Low"].iloc[-1])
-    last_rsi_h = float(df["RSI_high"].iloc[-1])
-    last_rsi_l = float(df["RSI_low"].iloc[-1])
+    last_rsi   = float(df["RSI"].iloc[-1])
     last_iso   = last_time.isoformat()
     time_str   = last_time.strftime("%Y-%m-%d %H:%M UTC")
 
@@ -271,10 +275,10 @@ def check_symbol(symbol, display_name, state):
     if len(saved_lows) >= MIN_STORED_PIVOTS:
         ref = saved_lows[-1]
         if ref["t"] < last_iso and sym_state.get("last_buy_alert_candle") != last_iso:
-            low_lower  = last_low < ref["p"]
-            rsi_higher = last_rsi_l > ref["r"]
+            low_lower  = last_low < ref["p"]              # friss wick mélyebben
+            rsi_higher = last_rsi > ref["r"]              # RSI Close magasabban
             price_ok   = (ref["p"] - last_low)   >= MIN_PRICE_DIFF
-            rsi_ok     = (last_rsi_l - ref["r"]) >= MIN_RSI_DIFF
+            rsi_ok     = (last_rsi - ref["r"])   >= MIN_RSI_DIFF
 
             if low_lower and rsi_higher and price_ok and rsi_ok:
                 subject = "Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia"
@@ -282,10 +286,10 @@ def check_symbol(symbol, display_name, state):
                     f"Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia\n\n"
                     f"Symbol: {symbol}\n"
                     f"Frissen lezárt H4 gyertya: {time_str}\n\n"
-                    f"Referencia pivot low: {ref['p']:.4f}  RSI_low: {ref['r']:.2f}  ({ref['t']})\n"
-                    f"Friss H4 gyertya Low:  {last_low:.4f}  RSI_low: {last_rsi_l:.2f}  ({last_iso})\n"
+                    f"Referencia pivot low: {ref['p']:.4f}  RSI: {ref['r']:.2f}  ({ref['t']})\n"
+                    f"Friss H4 gyertya Low:  {last_low:.4f}  RSI: {last_rsi:.2f}  ({last_iso})\n"
                     f"Ár különbség (pivot - friss): {ref['p'] - last_low:.4f}\n"
-                    f"RSI különbség (friss - pivot): {last_rsi_l - ref['r']:.2f}\n"
+                    f"RSI különbség (friss - pivot): {last_rsi - ref['r']:.2f}\n"
                 )
                 send_email(subject, body)
                 sym_state["last_buy_alert_candle"] = last_iso
@@ -294,10 +298,10 @@ def check_symbol(symbol, display_name, state):
     if len(saved_highs) >= MIN_STORED_PIVOTS:
         ref = saved_highs[-1]
         if ref["t"] < last_iso and sym_state.get("last_sell_alert_candle") != last_iso:
-            high_higher = last_high > ref["p"]
-            rsi_lower   = last_rsi_h < ref["r"]
+            high_higher = last_high > ref["p"]            # friss wick magasabban
+            rsi_lower   = last_rsi < ref["r"]             # RSI Close lejjebb
             price_ok    = (last_high - ref["p"])  >= MIN_PRICE_DIFF
-            rsi_ok      = (ref["r"] - last_rsi_h) >= MIN_RSI_DIFF
+            rsi_ok      = (ref["r"] - last_rsi)   >= MIN_RSI_DIFF
 
             if high_higher and rsi_lower and price_ok and rsi_ok:
                 subject = "Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia"
@@ -305,10 +309,10 @@ def check_symbol(symbol, display_name, state):
                     f"Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia\n\n"
                     f"Symbol: {symbol}\n"
                     f"Frissen lezárt H4 gyertya: {time_str}\n\n"
-                    f"Referencia pivot high: {ref['p']:.4f}  RSI_high: {ref['r']:.2f}  ({ref['t']})\n"
-                    f"Friss H4 gyertya High:  {last_high:.4f}  RSI_high: {last_rsi_h:.2f}  ({last_iso})\n"
+                    f"Referencia pivot high: {ref['p']:.4f}  RSI: {ref['r']:.2f}  ({ref['t']})\n"
+                    f"Friss H4 gyertya High:  {last_high:.4f}  RSI: {last_rsi:.2f}  ({last_iso})\n"
                     f"Ár különbség (friss - pivot): {last_high - ref['p']:.4f}\n"
-                    f"RSI különbség (pivot - friss): {ref['r'] - last_rsi_h:.2f}\n"
+                    f"RSI különbség (pivot - friss): {ref['r'] - last_rsi:.2f}\n"
                 )
                 send_email(subject, body)
                 sym_state["last_sell_alert_candle"] = last_iso
