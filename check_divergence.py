@@ -16,26 +16,41 @@ SYMBOLS = {
     "NQ=F": "Nasdaq",
 }
 
+# Figyelt idősíkok
+TIMEFRAMES = ["H1", "H4"]
+
 RSI_PERIOD     = 14
 PIVOT_LEN      = 5
 
-# Divergencia szűrők — ideiglenesen 0.0, első tesztekhez
+# Divergencia szűrők — egyelőre 0.0
 MIN_RSI_DIFF   = 0.0
 MIN_PRICE_DIFF = 0.0
 
-# Legalább ennyi eltárolt pivot kell az email-küldéshez
 MIN_STORED_PIVOTS = 1
 
-# A H4 gyertya hivatalos zárása után ennyi ráhagyás,
-# mert a Yahoo 15m adat ~15-20 percet késik
+# A gyertya hivatalos zárása után ennyi ráhagyás (Yahoo késés miatt)
 CLOSE_BUFFER = pd.Timedelta(minutes=15)
 
-# Ha a legutolsó lezárt H4 gyertya zárása ennél régebbi,
-# a Yahoo feed beragadt -> nem küldünk emailt
-MAX_DATA_AGE = pd.Timedelta(hours=5)
+# Frissességi limitek idősíkonként
+MAX_DATA_AGE = {
+    "H1": pd.Timedelta(minutes=90),
+    "H4": pd.Timedelta(hours=5),
+}
+
+# pandas resample szabály idősíkonként
+RESAMPLE_RULE = {
+    "H1": "1h",
+    "H4": "4h",
+}
+
+# Egy gyertya hossza idősíkonként (a zárás számításához)
+BAR_DURATION = {
+    "H1": pd.Timedelta(hours=1),
+    "H4": pd.Timedelta(hours=4),
+}
 
 STATE_FILE = "state.json"
-CURRENT_STATE_VERSION = 3   # v3: RSI Close (nem High/Low)
+CURRENT_STATE_VERSION = 4   # v4: H1 + H4 struktúra
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
@@ -66,19 +81,20 @@ def migrate_state(state):
         for old_key in (f"{symbol}_last_buy_pivot", f"{symbol}_last_sell_pivot"):
             state.pop(old_key, None)
 
+    # Verzióváltás: H1+H4 struktúra bevezetése, mindent újraépítünk
     if state.get("_version") != CURRENT_STATE_VERSION:
         for symbol in SYMBOLS:
-            if symbol in state and isinstance(state[symbol], dict):
-                state[symbol]["pivot_highs"] = []
-                state[symbol]["pivot_lows"]  = []
+            state.pop(symbol, None)
         state["_version"] = CURRENT_STATE_VERSION
 
     for symbol in SYMBOLS:
         sym = state.setdefault(symbol, {})
-        sym.setdefault("pivot_highs", [])
-        sym.setdefault("pivot_lows", [])
-        sym.setdefault("last_buy_alert_candle", None)
-        sym.setdefault("last_sell_alert_candle", None)
+        for tf in TIMEFRAMES:
+            tf_state = sym.setdefault(tf, {})
+            tf_state.setdefault("pivot_highs", [])
+            tf_state.setdefault("pivot_lows", [])
+            tf_state.setdefault("last_buy_alert_candle", None)
+            tf_state.setdefault("last_sell_alert_candle", None)
 
 
 def send_email(subject, body):
@@ -103,7 +119,7 @@ def send_email(subject, body):
 
 
 # ============================================================
-# RSI (Wilder's smoothing, alpha = 1/period)
+# RSI (Wilder's smoothing)
 # ============================================================
 def compute_rsi(series, period=14):
     delta = series.diff()
@@ -119,9 +135,13 @@ def compute_rsi(series, period=14):
 
 
 # ============================================================
-# ADAT LETÖLTÉS — KÖZVETLEN YAHOO API
+# ADAT LETÖLTÉS — YAHOO API
 # ============================================================
-def download_4h(symbol):
+def download_tf(symbol, tf):
+    """
+    Egy Yahoo-hívást indít, majd az adatot a kért idősíkra resampleli.
+    A visszatérő df csak a biztosan lezárt gyertyákat tartalmazza.
+    """
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         params = {
@@ -144,7 +164,7 @@ def download_4h(symbol):
         result = data["chart"]["result"][0]
         timestamps = result.get("timestamp", [])
         if not timestamps:
-            print(f"⚠ Nincs timestamp a válaszban: {symbol}")
+            print(f"⚠ Nincs timestamp a válaszban: {symbol} [{tf}]")
             return None
 
         quote = result["indicators"]["quote"][0]
@@ -158,10 +178,11 @@ def download_4h(symbol):
 
         df = df.dropna()
         if df.empty:
-            print(f"⚠ Üres adat: {symbol}")
+            print(f"⚠ Üres adat: {symbol} [{tf}]")
             return None
 
-        df4 = df.resample("4h").agg({
+        # Resample az idősíkra
+        df_tf = df.resample(RESAMPLE_RULE[tf]).agg({
             "Open":   "first",
             "High":   "max",
             "Low":    "min",
@@ -169,12 +190,13 @@ def download_4h(symbol):
             "Volume": "sum",
         }).dropna()
 
+        # Csak a biztosan lezárt gyertyák
         now_utc = pd.Timestamp.now(tz="UTC")
-        df4 = df4[df4.index + pd.Timedelta(hours=4) + CLOSE_BUFFER <= now_utc]
+        df_tf = df_tf[df_tf.index + BAR_DURATION[tf] + CLOSE_BUFFER <= now_utc]
 
-        return df4
+        return df_tf
     except Exception as e:
-        print(f"⚠ Hiba a letöltésnél ({symbol}): {e}")
+        print(f"⚠ Hiba a letöltésnél ({symbol} [{tf}]): {e}")
         return None
 
 
@@ -208,33 +230,73 @@ def find_pivots(df, left, right):
 
 
 # ============================================================
-# DIVERGENCIA LOGIKA — AZONNALI EMAIL
+# EMAIL FORMÁZÁS
 # ============================================================
-def check_symbol(symbol, display_name, state):
-    df = download_4h(symbol)
+def build_email_body(tf, symbol, display_name, side, time_str, ref, last_price, last_rsi,
+                     price_diff, rsi_diff):
+    """
+    Az idősíkot nagyban, feltűnően jeleníti meg a levél tetején.
+    side: 'BUY' vagy 'SELL'
+    ref: { 't': iso_timestamp, 'p': price, 'r': rsi }
+    """
+    side_hu = "VÉTELI" if side == "BUY" else "ELADÁSI"
+    ref_label = "pivot low" if side == "BUY" else "pivot high"
+    fresh_label = "Low" if side == "BUY" else "High"
+    tf_full = "1 órás" if tf == "H1" else "4 órás"
+
+    banner = "═" * 60
+    body = (
+        f"{banner}\n"
+        f"   ▶▶  {tf}  ◀◀    {display_name.upper()} — {side_hu} LEHETŐSÉG\n"
+        f"{banner}\n"
+        f"\n"
+        f"IDŐSÍK: {tf}  ({tf_full} gyertya)\n"
+        f"IRÁNY:  {side_hu}\n"
+        f"\n"
+        f"{banner}\n"
+        f"\n"
+        f"Symbol:                 {symbol}  ({display_name})\n"
+        f"Frissen lezárt gyertya: {time_str}\n"
+        f"\n"
+        f"Referencia {ref_label}:  {ref['p']:.4f}   RSI: {ref['r']:.2f}   ({ref['t']})\n"
+        f"Friss gyertya {fresh_label}:      {last_price:.4f}   RSI: {last_rsi:.2f}   ({time_str})\n"
+        f"\n"
+        f"Ár különbség (referencia - friss): {price_diff:.4f}\n"
+        f"RSI különbség (friss - referencia): {rsi_diff:.2f}\n"
+        f"\n"
+        f"{banner}\n"
+    )
+    return body
+
+
+# ============================================================
+# DIVERGENCIA LOGIKA — egy (symbol, timeframe) párra
+# ============================================================
+def check_symbol_tf(symbol, display_name, tf, state):
+    df = download_tf(symbol, tf)
     if df is None or len(df) < 15:
-        print(f"⚠ Kevés adat: {symbol}")
+        print(f"⚠ Kevés adat: {symbol} [{tf}]")
         return
 
     # ── Frissesség ellenőrzés ──────────────────────────────────
     last_time       = df.index[-1]
-    last_close_time = last_time + pd.Timedelta(hours=4)
+    last_close_time = last_time + BAR_DURATION[tf]
     now_utc         = pd.Timestamp.now(tz="UTC")
     data_age        = now_utc - last_close_time
-    if data_age > MAX_DATA_AGE:
+    age_limit       = MAX_DATA_AGE[tf]
+    if data_age > age_limit:
         print(
-            f"⚠ Elavult Yahoo adat ({symbol}): utolsó lezárt H4 gyertya "
-            f"zárása {last_close_time} ({data_age} ezelőtt). Email kihagyva."
+            f"⚠ Elavult Yahoo adat ({symbol} [{tf}]): utolsó lezárt gyertya "
+            f"zárása {last_close_time} ({data_age} ezelőtt, limit={age_limit}). Email kihagyva."
         )
         return
 
-    # ── RSI Close (egyetlen sorozat) ───────────────────────────
+    # ── RSI Close ──────────────────────────────────────────────
     df["RSI"] = compute_rsi(df["Close"], RSI_PERIOD)
 
     ph, pl = find_pivots(df, PIVOT_LEN, PIVOT_LEN)
     n = len(df)
 
-    # Pivot pozíció: High/Low. RSI érték a pivot gyertya Close-jából.
     confirmed_highs = [
         (df.index[i], float(df["High"].iloc[i]), float(df["RSI"].iloc[i]))
         for i in range(n) if ph[i]
@@ -244,9 +306,11 @@ def check_symbol(symbol, display_name, state):
         for i in range(n) if pl[i]
     ]
 
-    sym_state   = state.setdefault(symbol, {})
-    saved_highs = sym_state.setdefault("pivot_highs", [])
-    saved_lows  = sym_state.setdefault("pivot_lows", [])
+    # Idősíkonként külön pivot lista
+    sym_state = state.setdefault(symbol, {})
+    tf_state  = sym_state.setdefault(tf, {})
+    saved_highs = tf_state.setdefault("pivot_highs", [])
+    saved_lows  = tf_state.setdefault("pivot_lows", [])
 
     def merge(saved, new_items):
         seen = {p["t"] for p in saved}
@@ -260,11 +324,12 @@ def check_symbol(symbol, display_name, state):
     merge(saved_highs, confirmed_highs)
     merge(saved_lows,  confirmed_lows)
 
-    # ── Friss (legutolsó lezárt) H4 gyertya ────────────────────
-    # A wick (Low/High) számít a pivot-átlépéshez.
-    # A Close-t csak az RSI-hez használjuk.
-    # Ha a wick átlépte a pivot szintet, JELEZÜNK – akkor is,
-    # ha a Close visszament a pivot fölé/alá.
+    print(
+        f"   [{tf}] {symbol} | utolsó lezárt: {last_time} ({data_age} ezelőtt) "
+        f"| pivot high: {len(saved_highs)} | pivot low: {len(saved_lows)}"
+    )
+
+    # ── Friss gyertya (wick) ──────────────────────────────────
     last_high  = float(df["High"].iloc[-1])
     last_low   = float(df["Low"].iloc[-1])
     last_rsi   = float(df["RSI"].iloc[-1])
@@ -274,48 +339,48 @@ def check_symbol(symbol, display_name, state):
     # ============ BULLISH (vételi) ============
     if len(saved_lows) >= MIN_STORED_PIVOTS:
         ref = saved_lows[-1]
-        if ref["t"] < last_iso and sym_state.get("last_buy_alert_candle") != last_iso:
-            low_lower  = last_low < ref["p"]              # friss wick mélyebben
-            rsi_higher = last_rsi > ref["r"]              # RSI Close magasabban
+        if ref["t"] < last_iso and tf_state.get("last_buy_alert_candle") != last_iso:
+            low_lower  = last_low < ref["p"]
+            rsi_higher = last_rsi > ref["r"]
             price_ok   = (ref["p"] - last_low)   >= MIN_PRICE_DIFF
             rsi_ok     = (last_rsi - ref["r"])   >= MIN_RSI_DIFF
 
             if low_lower and rsi_higher and price_ok and rsi_ok:
-                subject = "Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia"
-                body = (
-                    f"Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, H4 RSI Divergencia\n\n"
-                    f"Symbol: {symbol}\n"
-                    f"Frissen lezárt H4 gyertya: {time_str}\n\n"
-                    f"Referencia pivot low: {ref['p']:.4f}  RSI: {ref['r']:.2f}  ({ref['t']})\n"
-                    f"Friss H4 gyertya Low:  {last_low:.4f}  RSI: {last_rsi:.2f}  ({last_iso})\n"
-                    f"Ár különbség (pivot - friss): {ref['p'] - last_low:.4f}\n"
-                    f"RSI különbség (friss - pivot): {last_rsi - ref['r']:.2f}\n"
+                subject = (
+                    f"{tf} | Nasdaq LQQ , 3QQQ VÉTELI lehetőség keletkezett, RSI Divergencia"
+                )
+                body = build_email_body(
+                    tf=tf, symbol=symbol, display_name=display_name, side="BUY",
+                    time_str=time_str, ref=ref,
+                    last_price=last_low, last_rsi=last_rsi,
+                    price_diff=ref["p"] - last_low,
+                    rsi_diff=last_rsi - ref["r"]
                 )
                 send_email(subject, body)
-                sym_state["last_buy_alert_candle"] = last_iso
+                tf_state["last_buy_alert_candle"] = last_iso
 
     # ============ BEARISH (eladási) ============
     if len(saved_highs) >= MIN_STORED_PIVOTS:
         ref = saved_highs[-1]
-        if ref["t"] < last_iso and sym_state.get("last_sell_alert_candle") != last_iso:
-            high_higher = last_high > ref["p"]            # friss wick magasabban
-            rsi_lower   = last_rsi < ref["r"]             # RSI Close lejjebb
+        if ref["t"] < last_iso and tf_state.get("last_sell_alert_candle") != last_iso:
+            high_higher = last_high > ref["p"]
+            rsi_lower   = last_rsi < ref["r"]
             price_ok    = (last_high - ref["p"])  >= MIN_PRICE_DIFF
             rsi_ok      = (ref["r"] - last_rsi)   >= MIN_RSI_DIFF
 
             if high_higher and rsi_lower and price_ok and rsi_ok:
-                subject = "Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia"
-                body = (
-                    f"Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, H4 RSI Divergencia\n\n"
-                    f"Symbol: {symbol}\n"
-                    f"Frissen lezárt H4 gyertya: {time_str}\n\n"
-                    f"Referencia pivot high: {ref['p']:.4f}  RSI: {ref['r']:.2f}  ({ref['t']})\n"
-                    f"Friss H4 gyertya High:  {last_high:.4f}  RSI: {last_rsi:.2f}  ({last_iso})\n"
-                    f"Ár különbség (friss - pivot): {last_high - ref['p']:.4f}\n"
-                    f"RSI különbség (pivot - friss): {ref['r'] - last_rsi:.2f}\n"
+                subject = (
+                    f"{tf} | Nasdaq LQQ , 3QQQ ELADÁSI lehetőség keletkezett, RSI Divergencia"
+                )
+                body = build_email_body(
+                    tf=tf, symbol=symbol, display_name=display_name, side="SELL",
+                    time_str=time_str, ref=ref,
+                    last_price=last_high, last_rsi=last_rsi,
+                    price_diff=last_high - ref["p"],
+                    rsi_diff=ref["r"] - last_rsi
                 )
                 send_email(subject, body)
-                sym_state["last_sell_alert_candle"] = last_iso
+                tf_state["last_sell_alert_candle"] = last_iso
 
 
 # ============================================================
@@ -328,10 +393,11 @@ def main():
     migrate_state(state)
 
     for symbol, name in SYMBOLS.items():
-        try:
-            check_symbol(symbol, name, state)
-        except Exception as e:
-            print(f"❌ Hiba {symbol}-nál: {e}")
+        for tf in TIMEFRAMES:
+            try:
+                check_symbol_tf(symbol, name, tf, state)
+            except Exception as e:
+                print(f"❌ Hiba {symbol} [{tf}]-nál: {e}")
 
     save_state(state)
     print("✅ Kész.")
