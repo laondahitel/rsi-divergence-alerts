@@ -1,10 +1,18 @@
 {
   "6E=F_last_buy_pivot": "2026-09-18T08:00:00-04:00",
-  "_version": 3,
+  "_version": 4,
   "NQ=F": {
-    "pivot_highs": [],
-    "pivot_lows": [],
-    "last_buy_alert_candle": null,
-    "last_sell_alert_candle": null
+    "H1": {
+      "pivot_highs": [],
+      "pivot_lows": [],
+      "last_buy_alert_candle": null,
+      "last_sell_alert_candle": null
+    },
+    "H4": {
+      "pivot_highs": [],
+      "pivot_lows": [],
+      "last_buy_alert_candle": null,
+      "last_sell_alert_candle": null
+    }
   }
 }
