@@ -518,7 +518,7 @@
       "buy_ref_low_price": 0.0,
       "buy_ref_low_rsi": 0.0,
       "buy_ref_low_time": null,
-      "sell_state": "WAIT_LOW_RSI",
+      "sell_state": "WAIT_HIGH_RSI",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
       "sell_ref_high_time": null,
