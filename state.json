@@ -3,7 +3,7 @@
   "_version": 11,
   "NQ=F": {
     "H1": {
-      "buy_state": "TRACKING_LOW",
+      "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 29563.5,
       "buy_ref_low_rsi": 39.73347371691067,
       "buy_ref_low_time": "2026-10-18T23:00:00+00:00",
