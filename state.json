@@ -3,10 +3,10 @@
   "_version": 11,
   "NQ=F": {
     "H1": {
-      "buy_state": "IDLE",
-      "buy_ref_low_price": 0.0,
-      "buy_ref_low_rsi": 0.0,
-      "buy_ref_low_time": null,
+      "buy_state": "TRACKING_LOW",
+      "buy_ref_low_price": 29563.5,
+      "buy_ref_low_rsi": 39.73347371691067,
+      "buy_ref_low_time": "2026-10-18T23:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
@@ -15,10 +15,10 @@
       "last_sell_alert_candle": null
     },
     "H4": {
-      "buy_state": "IDLE",
-      "buy_ref_low_price": 0.0,
-      "buy_ref_low_rsi": 0.0,
-      "buy_ref_low_time": null,
+      "buy_state": "TRACKING_LOW",
+      "buy_ref_low_price": 29501.25,
+      "buy_ref_low_rsi": 34.68848618052499,
+      "buy_ref_low_time": "2026-10-18T20:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
