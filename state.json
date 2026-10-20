@@ -1,6 +1,6 @@
 {
   "6E=F_last_buy_pivot": "2026-09-18T08:00:00-04:00",
-  "_version": 11,
+  "_version": 12,
   "NQ=F": {
     "H1": {
       "buy_state": "WAIT_DIVERGENCE",
@@ -46,6 +46,56 @@
       "sell_state": "TRACKING_HIGH",
       "sell_ref_high_price": 31616.5,
       "sell_ref_high_rsi": 65.34391980811401,
+      "sell_ref_high_time": "2026-10-11T00:00:00+00:00",
+      "last_buy_alert_candle": null,
+      "last_sell_alert_candle": null
+    }
+  },
+  "NQZ26.CME": {
+    "H1": {
+      "buy_state": "IDLE",
+      "buy_ref_low_price": 0.0,
+      "buy_ref_low_rsi": 0.0,
+      "buy_ref_low_time": null,
+      "sell_state": "IDLE",
+      "sell_ref_high_price": 0.0,
+      "sell_ref_high_rsi": 0.0,
+      "sell_ref_high_time": null,
+      "last_buy_alert_candle": null,
+      "last_sell_alert_candle": null
+    },
+    "H4": {
+      "buy_state": "IDLE",
+      "buy_ref_low_price": 0.0,
+      "buy_ref_low_rsi": 0.0,
+      "buy_ref_low_time": null,
+      "sell_state": "IDLE",
+      "sell_ref_high_price": 0.0,
+      "sell_ref_high_rsi": 0.0,
+      "sell_ref_high_time": null,
+      "last_buy_alert_candle": null,
+      "last_sell_alert_candle": null
+    },
+    "D1": {
+      "buy_state": "IDLE",
+      "buy_ref_low_price": 0.0,
+      "buy_ref_low_rsi": 0.0,
+      "buy_ref_low_time": null,
+      "sell_state": "IDLE",
+      "sell_ref_high_price": 0.0,
+      "sell_ref_high_rsi": 0.0,
+      "sell_ref_high_time": null,
+      "last_buy_alert_candle": null,
+      "last_sell_alert_candle": null
+    },
+    "W1": {
+      "buy_state": "IDLE",
+      "buy_ref_low_price": 0.0,
+      "buy_ref_low_rsi": 0.0,
+      "buy_ref_low_time": null,
+      "sell_state": "TRACKING_HIGH",
+      "sell_ref_high_price": 31616.5,
+      "sell_ref_high_rsi": 63.353568246194214,
       "sell_ref_high_time": "2026-10-11T00:00:00+00:00",
       "last_buy_alert_candle": null,
       "last_sell_alert_candle": null
