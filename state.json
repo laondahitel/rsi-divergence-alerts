@@ -28,9 +28,9 @@
     },
     "D1": {
       "buy_state": "TRACKING_LOW",
-      "buy_ref_low_price": 29268.75,
-      "buy_ref_low_rsi": 35.519115446898226,
-      "buy_ref_low_time": "2026-10-16T00:00:00+00:00",
+      "buy_ref_low_price": 29226.0,
+      "buy_ref_low_rsi": 41.18363080726083,
+      "buy_ref_low_time": "2026-10-19T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
