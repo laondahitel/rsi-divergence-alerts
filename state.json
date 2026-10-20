@@ -15,7 +15,7 @@
       "last_sell_alert_candle": null
     },
     "H4": {
-      "buy_state": "WAIT_DIVERGENCE",
+      "buy_state": "IDLE",
       "buy_ref_low_price": 29501.25,
       "buy_ref_low_rsi": 34.68848618052499,
       "buy_ref_low_time": "2026-10-18T20:00:00+00:00",
@@ -23,7 +23,7 @@
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
       "sell_ref_high_time": null,
-      "last_buy_alert_candle": null,
+      "last_buy_alert_candle": "2026-10-20T12:00:00+00:00",
       "last_sell_alert_candle": null
     },
     "D1": {
