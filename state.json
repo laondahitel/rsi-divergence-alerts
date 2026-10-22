@@ -77,7 +77,7 @@
       "last_sell_alert_candle": null
     },
     "D1": {
-      "buy_state": "TRACKING_LOW",
+      "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 29391.75,
       "buy_ref_low_rsi": 39.58363825900111,
       "buy_ref_low_time": "2026-10-20T00:00:00+00:00",
