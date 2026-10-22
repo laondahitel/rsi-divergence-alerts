@@ -53,10 +53,10 @@
   },
   "NQZ26.CME": {
     "H1": {
-      "buy_state": "IDLE",
-      "buy_ref_low_price": 0.0,
-      "buy_ref_low_rsi": 0.0,
-      "buy_ref_low_time": null,
+      "buy_state": "TRACKING_LOW",
+      "buy_ref_low_price": 29463.5,
+      "buy_ref_low_rsi": 29.58376233828686,
+      "buy_ref_low_time": "2026-10-22T07:00:00+00:00",
       "sell_state": "WAIT_DIVERGENCE_SELL",
       "sell_ref_high_price": 30059.5,
       "sell_ref_high_rsi": 63.374802934565814,
@@ -65,10 +65,10 @@
       "last_sell_alert_candle": null
     },
     "H4": {
-      "buy_state": "IDLE",
-      "buy_ref_low_price": 0.0,
-      "buy_ref_low_rsi": 0.0,
-      "buy_ref_low_time": null,
+      "buy_state": "TRACKING_LOW",
+      "buy_ref_low_price": 29463.5,
+      "buy_ref_low_rsi": 37.834339728026,
+      "buy_ref_low_time": "2026-10-22T04:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
