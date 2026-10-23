@@ -66,9 +66,9 @@
     },
     "H4": {
       "buy_state": "TRACKING_LOW",
-      "buy_ref_low_price": 29022.75,
-      "buy_ref_low_rsi": 33.4485613651032,
-      "buy_ref_low_time": "2026-10-23T00:00:00+00:00",
+      "buy_ref_low_price": 28987.0,
+      "buy_ref_low_rsi": 39.817897019208296,
+      "buy_ref_low_time": "2026-10-23T12:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
