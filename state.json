@@ -78,9 +78,9 @@
     },
     "D1": {
       "buy_state": "WAIT_DIVERGENCE",
-      "buy_ref_low_price": 29033.0,
-      "buy_ref_low_rsi": 35.8462011939847,
-      "buy_ref_low_time": "2026-10-22T00:00:00+00:00",
+      "buy_ref_low_price": 28987.0,
+      "buy_ref_low_rsi": 35.623719075154,
+      "buy_ref_low_time": "2026-10-23T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
