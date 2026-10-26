@@ -71,18 +71,18 @@ RSI_OVERBOUGHT_LEVEL = {
 
 # 3. Vételi visszapattanás minimuma (RSI Rebound Buy)
 RSI_REBOUND_MIN_BUY = {
-    "W1": 5.0,
-    "D1": 4.0,
-    "H4": 3.0,
-    "H1": 2.0
+    "W1": 1.0,
+    "D1": 1.0,
+    "H4": 1.0,
+    "H1": 1.0
 }
 
 # 4. Eladási visszapattanás minimuma (RSI Rebound Sell)
 RSI_REBOUND_MIN_SELL = {
-    "W1": 5.0,
-    "D1": 4.0,
-    "H4": 3.0,
-    "H1": 2.0
+    "W1": 1.0,
+    "D1": 1.0,
+    "H4": 1.0,
+    "H1": 1.0
 }
 # -----------------------------------------------
 
