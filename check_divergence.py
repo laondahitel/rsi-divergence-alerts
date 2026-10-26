@@ -1,5 +1,5 @@
 # ============================================================
-# RSI DIVERGENCIA FIGYELŐ RENDSZER (v14 - Állítható változókkal)
+# RSI DIVERGENCIA FIGYELŐ RENDSZER (v15 - Idősíkonkénti változókkal)
 # ============================================================
 
 import os
@@ -44,11 +44,40 @@ TIMEFRAMES = ["H1", "H4", "D1", "W1"]
 RSI_PERIOD = 14
 CLOSE_BUFFER = pd.Timedelta(minutes=15)
 
-# --- ÁLLÍTHATÓ RSI PARAMÉTEREK ---
-RSI_OVERSOLD_LEVEL = 40     # Vételi feltétel: RSI ez alá essen (esésnél)
-RSI_OVERBOUGHT_LEVEL = 60   # Eladási feltétel: RSI ez fölé emelkedjen (emelkedésnél)
-RSI_REBOUND_MIN = 1.0       # Minimum RSI pattanás (különbség a mélypont és a visszapattanás között)
-# --------------------------------
+# --- IDŐSÍKONKÉNT ÁLLÍTHATÓ RSI PARAMÉTEREK ---
+
+# 1. Vételi feltétel: RSI ez alá essen (esésnél)
+RSI_OVERSOLD_LEVEL = {
+    "W1": 40,
+    "D1": 35,
+    "H4": 30,
+    "H1": 25
+}
+
+# 2. Eladási feltétel: RSI ez fölé emelkedjen (emelkedésnél)
+RSI_OVERBOUGHT_LEVEL = {
+    "W1": 60,
+    "D1": 65,
+    "H4": 70,
+    "H1": 75
+}
+
+# 3. Vételi visszapattanás minimuma (RSI Rebound Buy)
+RSI_REBOUND_MIN_BUY = {
+    "W1": 5.0,
+    "D1": 4.0,
+    "H4": 3.0,
+    "H1": 2.0
+}
+
+# 4. Eladási visszapattanás minimuma (RSI Rebound Sell)
+RSI_REBOUND_MIN_SELL = {
+    "W1": 5.0,
+    "D1": 4.0,
+    "H4": 3.0,
+    "H1": 2.0
+}
+# -----------------------------------------------
 
 MAX_DATA_AGE = {
     "H1": pd.Timedelta(hours=3),
@@ -61,7 +90,7 @@ RESAMPLE_RULE = {"H1": "1h", "H4": "4h", "D1": "1D", "W1": "1W"}
 BAR_DURATION = {"H1": pd.Timedelta(hours=1), "H4": pd.Timedelta(hours=4), "D1": pd.Timedelta(days=1), "W1": pd.Timedelta(weeks=1)}
 
 STATE_FILE = "state.json"
-CURRENT_STATE_VERSION = 14
+CURRENT_STATE_VERSION = 15
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
@@ -83,7 +112,7 @@ def save_state(state):
 
 def migrate_state(state):
     if state.get("_version") != CURRENT_STATE_VERSION:
-        state.clear() # Teljes reset a v14 miatt
+        state.clear() # Teljes reset a v15 miatt
         state["_version"] = CURRENT_STATE_VERSION
 
     for symbol in SYMBOLS:
@@ -133,7 +162,7 @@ def download_tf(symbol, tf):
     try:
         if tf in ["H1", "H4"]:
             api_interval = "5m"
-            api_range = "1mo"  # 5 perces adatoknál a Yahoo max 60 napot enged
+            api_range = "1mo"
         elif tf == "D1":
             api_interval = "1d"
             api_range = "1y"
@@ -167,10 +196,10 @@ def download_tf(symbol, tf):
         df = df.dropna()
         if df.empty: return None
 
-        # CME 23 órás szesszió kezelése (New York-i időzónához igazítás)
+        # CME 23 órás szesszió kezelése
         if tf in ["H1", "H4"]:
             df_ny = df.tz_convert('America/New_York')
-            df_shifted = df_ny.shift(freq='6h') # Eltolás, hogy a 18:00 ET legyen a 00:00
+            df_shifted = df_ny.shift(freq='6h')
             df_tf_ny = df_shifted.resample(RESAMPLE_RULE[tf]).agg({
                 "Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum",
             }).dropna()
@@ -240,27 +269,33 @@ def check_symbol_tf(symbol, display_name, tf, state):
     last_iso   = last_time.isoformat()
     time_str   = last_time.strftime("%Y-%m-%d %H:%M UTC")
 
+    # Kiolvassuk az aktuális idősíkhoz tartozó beállításokat
+    oversold_lvl = RSI_OVERSOLD_LEVEL.get(tf, 40)
+    overbought_lvl = RSI_OVERBOUGHT_LEVEL.get(tf, 60)
+    rebound_buy = RSI_REBOUND_MIN_BUY.get(tf, 5.0)
+    rebound_sell = RSI_REBOUND_MIN_SELL.get(tf, 5.0)
+
     print(f"   [{tf}] {symbol} | Ár: {last_close:.2f} | RSI: {last_rsi:.2f} | Státusz: {tf_state['buy_state']} / {tf_state['sell_state']} | Adat kora: {data_age}")
 
     # VÉTELI (BULLISH) LOGIKA
     buy_state = tf_state["buy_state"]
     if buy_state == "IDLE":
-        if last_rsi < RSI_OVERSOLD_LEVEL:  # <-- Itt használjuk a beállított változót
+        if last_rsi < oversold_lvl:
             tf_state["buy_state"] = "TRACKING_LOW"
             tf_state["buy_ref_low_price"] = last_low
             tf_state["buy_ref_low_rsi"] = last_rsi
             tf_state["buy_ref_low_time"] = last_iso
-            print(f"   [{tf}] {symbol} | 🟢 BUY: Feltétel 1 teljesült (RSI < {RSI_OVERSOLD_LEVEL}).")
+            print(f"   [{tf}] {symbol} | 🟢 BUY: Feltétel 1 teljesült (RSI < {oversold_lvl}).")
     elif buy_state == "TRACKING_LOW":
         if last_low < tf_state["buy_ref_low_price"]:
             tf_state["buy_ref_low_price"] = last_low
             tf_state["buy_ref_low_rsi"] = last_rsi
             tf_state["buy_ref_low_time"] = last_iso
-        if last_rsi >= tf_state["buy_ref_low_rsi"] + RSI_REBOUND_MIN:
+        if last_rsi >= tf_state["buy_ref_low_rsi"] + rebound_buy:
             tf_state["buy_state"] = "WAIT_DIVERGENCE"
-            print(f"   [{tf}] {symbol} | 🟢 BUY: Felpattanás (>={RSI_REBOUND_MIN}). Várjuk az új mélypontot...")
+            print(f"   [{tf}] {symbol} | 🟢 BUY: Felpattanás (>={rebound_buy}). Várjuk az új mélypontot...")
     elif buy_state == "WAIT_DIVERGENCE":
-        if last_low <= tf_state["buy_ref_low_price"] and (last_rsi - tf_state["buy_ref_low_rsi"]) >= RSI_REBOUND_MIN:
+        if last_low <= tf_state["buy_ref_low_price"] and (last_rsi - tf_state["buy_ref_low_rsi"]) >= rebound_buy:
             if tf_state.get("last_buy_alert_candle") != last_iso:
                 subject = f"{tf} | Nasdaq VÉTELI lehetőség - RSI Divergencia"
                 body = build_email_body(tf, symbol, display_name, "BUY", time_str, 
@@ -279,22 +314,22 @@ def check_symbol_tf(symbol, display_name, tf, state):
     # ELADÁSI (BEARISH) LOGIKA
     sell_state = tf_state["sell_state"]
     if sell_state == "IDLE":
-        if last_rsi > RSI_OVERBOUGHT_LEVEL:  # <-- Itt használjuk a beállított változót
+        if last_rsi > overbought_lvl:
             tf_state["sell_state"] = "TRACKING_HIGH"
             tf_state["sell_ref_high_price"] = last_high
             tf_state["sell_ref_high_rsi"] = last_rsi
             tf_state["sell_ref_high_time"] = last_iso
-            print(f"   [{tf}] {symbol} | 🔴 SELL: Feltétel 1 teljesült (RSI > {RSI_OVERBOUGHT_LEVEL}).")
+            print(f"   [{tf}] {symbol} | 🔴 SELL: Feltétel 1 teljesült (RSI > {overbought_lvl}).")
     elif sell_state == "TRACKING_HIGH":
         if last_high > tf_state["sell_ref_high_price"]:
             tf_state["sell_ref_high_price"] = last_high
             tf_state["sell_ref_high_rsi"] = last_rsi
             tf_state["sell_ref_high_time"] = last_iso
-        if last_rsi <= tf_state["sell_ref_high_rsi"] - RSI_REBOUND_MIN:
+        if last_rsi <= tf_state["sell_ref_high_rsi"] - rebound_sell:
             tf_state["sell_state"] = "WAIT_DIVERGENCE_SELL"
             print(f"   [{tf}] {symbol} | 🔴 SELL: Lepattanás. Várjuk az új csúcsot...")
     elif sell_state == "WAIT_DIVERGENCE_SELL":
-        if last_high >= tf_state["sell_ref_high_price"] and (tf_state["sell_ref_high_rsi"] - last_rsi) >= RSI_REBOUND_MIN:
+        if last_high >= tf_state["sell_ref_high_price"] and (tf_state["sell_ref_high_rsi"] - last_rsi) >= rebound_sell:
             if tf_state.get("last_sell_alert_candle") != last_iso:
                 subject = f"{tf} | Nasdaq ELADÁSI lehetőség - RSI Divergencia"
                 body = build_email_body(tf, symbol, display_name, "SELL", time_str,
