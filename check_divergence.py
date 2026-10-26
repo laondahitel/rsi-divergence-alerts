@@ -128,7 +128,7 @@ def download_tf(symbol, tf):
     try:
         if tf in ["H1", "H4"]:
             api_interval = "5m"
-            api_range = "3mo"  # Több adat, stabilabb RSI
+            api_range = "1mo"  # Több adat, stabilabb RSI
         elif tf == "D1":
             api_interval = "1d"
             api_range = "1y"
