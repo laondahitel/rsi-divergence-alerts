@@ -1,5 +1,5 @@
 # ============================================================
-# RSI DIVERGENCIA FIGYELŐ RENDSZER (v13 - Javított CME szesszió)
+# RSI DIVERGENCIA FIGYELŐ RENDSZER (v14 - Állítható változókkal)
 # ============================================================
 
 import os
@@ -18,8 +18,7 @@ import numpy as np
 # ============================================================
 def get_active_contract():
     """Kiszámolja az aktuális negyedéves CME futures szerződés nevét."""
-    # A képeid alapján 2026. decemberi kontraktust tesztelsz. 
-    # Ha élesben akarod futtatni a jelent, kommenteld ki a return-t és vedd ki a lenti sort.
+    # Ha élesben futtatod a jelent, vedd ki ezt a sort, és a lenti számítás fog lefutni
     return "NQZ26.CME" 
     
     now = datetime.now(timezone.utc)
@@ -33,21 +32,27 @@ def get_active_contract():
     return f"NQ{code}{str(year_str)[-2:]}.CME"
 
 # ============================================================
-# CONFIG
+# CONFIG (ITT ÁLLÍTHATOD BE A FONTOS ÉRTÉKEKET)
 # ============================================================
 ACTIVE_CONTRACT = get_active_contract()
-SYMBOLS = {ACTIVE_CONTRACT: "Nasdaq"}
+
+SYMBOLS = {
+    ACTIVE_CONTRACT: "Nasdaq",
+}
 
 TIMEFRAMES = ["H1", "H4", "D1", "W1"]
 RSI_PERIOD = 14
-PIVOT_LEN = 5
-RSI_REBOUND_MIN = 5.0
 CLOSE_BUFFER = pd.Timedelta(minutes=15)
 
-# JAVÍTÁS: Megnöveltük az adatkorlátokat, hogy a Yahoo késése ne dobja el a jelet!
+# --- ÁLLÍTHATÓ RSI PARAMÉTEREK ---
+RSI_OVERSOLD_LEVEL = 40     # Vételi feltétel: RSI ez alá essen (esésnél)
+RSI_OVERBOUGHT_LEVEL = 60   # Eladási feltétel: RSI ez fölé emelkedjen (emelkedésnél)
+RSI_REBOUND_MIN = 1.0       # Minimum RSI pattanás (különbség a mélypont és a visszapattanás között)
+# --------------------------------
+
 MAX_DATA_AGE = {
-    "H1": pd.Timedelta(hours=3),   # 90 percről 3 órára növelve
-    "H4": pd.Timedelta(hours=8),   # 5 óráról 8 órára növelve
+    "H1": pd.Timedelta(hours=3),
+    "H4": pd.Timedelta(hours=8),
     "D1": pd.Timedelta(days=3),
     "W1": pd.Timedelta(weeks=2),
 }
@@ -56,7 +61,7 @@ RESAMPLE_RULE = {"H1": "1h", "H4": "4h", "D1": "1D", "W1": "1W"}
 BAR_DURATION = {"H1": pd.Timedelta(hours=1), "H4": pd.Timedelta(hours=4), "D1": pd.Timedelta(days=1), "W1": pd.Timedelta(weeks=1)}
 
 STATE_FILE = "state.json"
-CURRENT_STATE_VERSION = 13
+CURRENT_STATE_VERSION = 14
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
@@ -78,7 +83,7 @@ def save_state(state):
 
 def migrate_state(state):
     if state.get("_version") != CURRENT_STATE_VERSION:
-        state.clear() # Teljes reset a v13 miatt
+        state.clear() # Teljes reset a v14 miatt
         state["_version"] = CURRENT_STATE_VERSION
 
     for symbol in SYMBOLS:
@@ -128,7 +133,7 @@ def download_tf(symbol, tf):
     try:
         if tf in ["H1", "H4"]:
             api_interval = "5m"
-            api_range = "1mo"  # Több adat, stabilabb RSI
+            api_range = "1mo"  # 5 perces adatoknál a Yahoo max 60 napot enged
         elif tf == "D1":
             api_interval = "1d"
             api_range = "1y"
@@ -162,7 +167,7 @@ def download_tf(symbol, tf):
         df = df.dropna()
         if df.empty: return None
 
-        # --- JAVÍTÁS: CME 23 órás szesszió kezelése (New York-i időzónához igazítás) ---
+        # CME 23 órás szesszió kezelése (New York-i időzónához igazítás)
         if tf in ["H1", "H4"]:
             df_ny = df.tz_convert('America/New_York')
             df_shifted = df_ny.shift(freq='6h') # Eltolás, hogy a 18:00 ET legyen a 00:00
@@ -175,7 +180,6 @@ def download_tf(symbol, tf):
             df_tf = df.resample(RESAMPLE_RULE[tf]).agg({
                 "Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum",
             }).dropna()
-        # -----------------------------------------------------------------------------
 
         now_utc = pd.Timestamp.now(tz="UTC")
         df_tf = df_tf[df_tf.index + BAR_DURATION[tf] + CLOSE_BUFFER <= now_utc]
@@ -241,12 +245,12 @@ def check_symbol_tf(symbol, display_name, tf, state):
     # VÉTELI (BULLISH) LOGIKA
     buy_state = tf_state["buy_state"]
     if buy_state == "IDLE":
-        if last_rsi < 40:
+        if last_rsi < RSI_OVERSOLD_LEVEL:  # <-- Itt használjuk a beállított változót
             tf_state["buy_state"] = "TRACKING_LOW"
             tf_state["buy_ref_low_price"] = last_low
             tf_state["buy_ref_low_rsi"] = last_rsi
             tf_state["buy_ref_low_time"] = last_iso
-            print(f"   [{tf}] {symbol} | 🟢 BUY: Feltétel 1 teljesült (RSI < 40).")
+            print(f"   [{tf}] {symbol} | 🟢 BUY: Feltétel 1 teljesült (RSI < {RSI_OVERSOLD_LEVEL}).")
     elif buy_state == "TRACKING_LOW":
         if last_low < tf_state["buy_ref_low_price"]:
             tf_state["buy_ref_low_price"] = last_low
@@ -275,12 +279,12 @@ def check_symbol_tf(symbol, display_name, tf, state):
     # ELADÁSI (BEARISH) LOGIKA
     sell_state = tf_state["sell_state"]
     if sell_state == "IDLE":
-        if last_rsi > 60:
+        if last_rsi > RSI_OVERBOUGHT_LEVEL:  # <-- Itt használjuk a beállított változót
             tf_state["sell_state"] = "TRACKING_HIGH"
             tf_state["sell_ref_high_price"] = last_high
             tf_state["sell_ref_high_rsi"] = last_rsi
             tf_state["sell_ref_high_time"] = last_iso
-            print(f"   [{tf}] {symbol} | 🔴 SELL: Feltétel 1 teljesült (RSI > 60).")
+            print(f"   [{tf}] {symbol} | 🔴 SELL: Feltétel 1 teljesült (RSI > {RSI_OVERBOUGHT_LEVEL}).")
     elif sell_state == "TRACKING_HIGH":
         if last_high > tf_state["sell_ref_high_price"]:
             tf_state["sell_ref_high_price"] = last_high
