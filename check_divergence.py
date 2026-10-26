@@ -1,5 +1,5 @@
 # ============================================================
-# RSI DIVERGENCIA FIGYELŐ RENDSZER (v16 - Warm-up funkcióval)
+# RSI DIVERGENCIA FIGYELŐ RENDSZER (v17 - RSI Storno logikával)
 # ============================================================
 
 import os
@@ -43,6 +43,13 @@ SYMBOLS = {
 TIMEFRAMES = ["H1", "H4", "D1", "W1"]
 RSI_PERIOD = 14
 CLOSE_BUFFER = pd.Timedelta(minutes=15)
+
+# --- STORNO (TÖRLÉSI) SZINTEK ---
+# Ha a vételi setup közben az RSI ide felmegy, a várakozás törlődik (mert már nem túladott a piac)
+STORNO_BUY_LEVEL = 51 
+
+# Ha az eladási setup közben az RSI ide leesik, a várakozás törlődik (mert már nem túlvett a piac)
+STORNO_SELL_LEVEL = 49 
 
 # --- IDŐSÍKONKÉNT ÁLLÍTHATÓ RSI PARAMÉTEREK ---
 
@@ -90,7 +97,7 @@ RESAMPLE_RULE = {"H1": "1h", "H4": "4h", "D1": "1D", "W1": "1W"}
 BAR_DURATION = {"H1": pd.Timedelta(hours=1), "H4": pd.Timedelta(hours=4), "D1": pd.Timedelta(days=1), "W1": pd.Timedelta(weeks=1)}
 
 STATE_FILE = "state.json"
-CURRENT_STATE_VERSION = 16  # Emelve a warm-up miatt
+CURRENT_STATE_VERSION = 17  # Verzió emelve a storno logika miatt
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
@@ -112,7 +119,7 @@ def save_state(state):
 
 def migrate_state(state):
     if state.get("_version") != CURRENT_STATE_VERSION:
-        state.clear() # Teljes reset a v16 miatt
+        state.clear() # Teljes reset a v17 miatt
         state["_version"] = CURRENT_STATE_VERSION
 
     for symbol in SYMBOLS:
@@ -243,7 +250,6 @@ def build_email_body(tf, symbol, display_name, side, time_str, ref, last_price, 
 # EGY GYERTYA FELDOLGOZÁSA (Warm-up és élő módban is ezt használjuk)
 # ============================================================
 def process_bar(tf_state, symbol, display_name, tf, high, low, close, rsi, time_iso, time_str, is_last_bar):
-    # Kiolvassuk az aktuális idősíkhoz tartozó beállításokat
     oversold_lvl = RSI_OVERSOLD_LEVEL.get(tf, 40)
     overbought_lvl = RSI_OVERBOUGHT_LEVEL.get(tf, 60)
     rebound_buy = RSI_REBOUND_MIN_BUY.get(tf, 5.0)
@@ -258,31 +264,41 @@ def process_bar(tf_state, symbol, display_name, tf, high, low, close, rsi, time_
             tf_state["buy_ref_low_rsi"] = rsi
             tf_state["buy_ref_low_time"] = time_iso
             if is_last_bar: print(f"   [{tf}] {symbol} | 🟢 BUY: Feltétel 1 teljesült (RSI < {oversold_lvl}).")
-    elif buy_state == "TRACKING_LOW":
-        if low < tf_state["buy_ref_low_price"]:
-            tf_state["buy_ref_low_price"] = low
-            tf_state["buy_ref_low_rsi"] = rsi
-            tf_state["buy_ref_low_time"] = time_iso
-        if rsi >= tf_state["buy_ref_low_rsi"] + rebound_buy:
-            tf_state["buy_state"] = "WAIT_DIVERGENCE"
-            if is_last_bar: print(f"   [{tf}] {symbol} | 🟢 BUY: Felpattanás (>={rebound_buy}). Várjuk az új mélypontot...")
-    elif buy_state == "WAIT_DIVERGENCE":
-        if low <= tf_state["buy_ref_low_price"] and (rsi - tf_state["buy_ref_low_rsi"]) >= rebound_buy:
-            if tf_state.get("last_buy_alert_candle") != time_iso:
-                if is_last_bar:
-                    subject = f"{tf} | Nasdaq VÉTELI lehetőség - RSI Divergencia"
-                    body = build_email_body(tf, symbol, display_name, "BUY", time_str, 
-                                            {'t': tf_state["buy_ref_low_time"], 'p': tf_state["buy_ref_low_price"], 'r': tf_state["buy_ref_low_rsi"]},
-                                            low, rsi, tf_state["buy_ref_low_price"] - low, rsi - tf_state["buy_ref_low_rsi"])
-                    send_email(subject, body)
-                    print(f"   [{tf}] {symbol} | 📧 BUY: Divergencia jelezve! Reset.")
-                tf_state["last_buy_alert_candle"] = time_iso
-                tf_state["buy_state"] = "IDLE"
-        elif low < tf_state["buy_ref_low_price"] and rsi < tf_state["buy_ref_low_rsi"]:
-            tf_state["buy_ref_low_price"] = low
-            tf_state["buy_ref_low_rsi"] = rsi
-            tf_state["buy_ref_low_time"] = time_iso
-            if is_last_bar: print(f"   [{tf}] {symbol} | 🟢 BUY: Új mélypont, de RSI is alacsonyabb. Referencia frissítve.")
+            
+    elif buy_state in ["TRACKING_LOW", "WAIT_DIVERGENCE"]:
+        # ÚJ: STORNO ELLENŐRZÉS (Ha az RSI felemelkedik a storno szint fölé, töröljük a setupot)
+        if rsi > STORNO_BUY_LEVEL:
+            tf_state["buy_state"] = "IDLE"
+            if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 BUY STORNO: RSI > {STORNO_BUY_LEVEL}. Várakozás törölve.")
+        
+        # Ha nem történt storno, akkor jön a normál logika
+        else:
+            if buy_state == "TRACKING_LOW":
+                if low < tf_state["buy_ref_low_price"]:
+                    tf_state["buy_ref_low_price"] = low
+                    tf_state["buy_ref_low_rsi"] = rsi
+                    tf_state["buy_ref_low_time"] = time_iso
+                if rsi >= tf_state["buy_ref_low_rsi"] + rebound_buy:
+                    tf_state["buy_state"] = "WAIT_DIVERGENCE"
+                    if is_last_bar: print(f"   [{tf}] {symbol} | 🟢 BUY: Felpattanás (>={rebound_buy}). Várjuk az új mélypontot...")
+            
+            elif buy_state == "WAIT_DIVERGENCE":
+                if low <= tf_state["buy_ref_low_price"] and (rsi - tf_state["buy_ref_low_rsi"]) >= rebound_buy:
+                    if tf_state.get("last_buy_alert_candle") != time_iso:
+                        if is_last_bar:
+                            subject = f"{tf} | Nasdaq VÉTELI lehetőség - RSI Divergencia"
+                            body = build_email_body(tf, symbol, display_name, "BUY", time_str, 
+                                                    {'t': tf_state["buy_ref_low_time"], 'p': tf_state["buy_ref_low_price"], 'r': tf_state["buy_ref_low_rsi"]},
+                                                    low, rsi, tf_state["buy_ref_low_price"] - low, rsi - tf_state["buy_ref_low_rsi"])
+                            send_email(subject, body)
+                            print(f"   [{tf}] {symbol} | 📧 BUY: Divergencia jelezve! Reset.")
+                        tf_state["last_buy_alert_candle"] = time_iso
+                        tf_state["buy_state"] = "IDLE"
+                elif low < tf_state["buy_ref_low_price"] and rsi < tf_state["buy_ref_low_rsi"]:
+                    tf_state["buy_ref_low_price"] = low
+                    tf_state["buy_ref_low_rsi"] = rsi
+                    tf_state["buy_ref_low_time"] = time_iso
+                    if is_last_bar: print(f"   [{tf}] {symbol} | 🟢 BUY: Új mélypont, de RSI is alacsonyabb. Referencia frissítve.")
 
     # ELADÁSI (BEARISH) LOGIKA
     sell_state = tf_state["sell_state"]
@@ -293,31 +309,41 @@ def process_bar(tf_state, symbol, display_name, tf, high, low, close, rsi, time_
             tf_state["sell_ref_high_rsi"] = rsi
             tf_state["sell_ref_high_time"] = time_iso
             if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 SELL: Feltétel 1 teljesült (RSI > {overbought_lvl}).")
-    elif sell_state == "TRACKING_HIGH":
-        if high > tf_state["sell_ref_high_price"]:
-            tf_state["sell_ref_high_price"] = high
-            tf_state["sell_ref_high_rsi"] = rsi
-            tf_state["sell_ref_high_time"] = time_iso
-        if rsi <= tf_state["sell_ref_high_rsi"] - rebound_sell:
-            tf_state["sell_state"] = "WAIT_DIVERGENCE_SELL"
-            if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 SELL: Lepattanás. Várjuk az új csúcsot...")
-    elif sell_state == "WAIT_DIVERGENCE_SELL":
-        if high >= tf_state["sell_ref_high_price"] and (tf_state["sell_ref_high_rsi"] - rsi) >= rebound_sell:
-            if tf_state.get("last_sell_alert_candle") != time_iso:
-                if is_last_bar:
-                    subject = f"{tf} | Nasdaq ELADÁSI lehetőség - RSI Divergencia"
-                    body = build_email_body(tf, symbol, display_name, "SELL", time_str,
-                                            {'t': tf_state["sell_ref_high_time"], 'p': tf_state["sell_ref_high_price"], 'r': tf_state["sell_ref_high_rsi"]},
-                                            high, rsi, high - tf_state["sell_ref_high_price"], tf_state["sell_ref_high_rsi"] - rsi)
-                    send_email(subject, body)
-                    print(f"   [{tf}] {symbol} | 📧 SELL: Divergencia jelezve! Reset.")
-                tf_state["last_sell_alert_candle"] = time_iso
-                tf_state["sell_state"] = "IDLE"
-        elif high > tf_state["sell_ref_high_price"] and rsi > tf_state["sell_ref_high_rsi"]:
-            tf_state["sell_ref_high_price"] = high
-            tf_state["sell_ref_high_rsi"] = rsi
-            tf_state["sell_ref_high_time"] = time_iso
-            if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 SELL: Új csúcs, de RSI is magasabb. Referencia frissítve.")
+            
+    elif sell_state in ["TRACKING_HIGH", "WAIT_DIVERGENCE_SELL"]:
+        # ÚJ: STORNO ELLENŐRZÉS (Ha az RSI leesik a storno szint alá, töröljük a setupot)
+        if rsi < STORNO_SELL_LEVEL:
+            tf_state["sell_state"] = "IDLE"
+            if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 SELL STORNO: RSI < {STORNO_SELL_LEVEL}. Várakozás törölve.")
+            
+        # Ha nem történt storno, akkor jön a normál logika
+        else:
+            if sell_state == "TRACKING_HIGH":
+                if high > tf_state["sell_ref_high_price"]:
+                    tf_state["sell_ref_high_price"] = high
+                    tf_state["sell_ref_high_rsi"] = rsi
+                    tf_state["sell_ref_high_time"] = time_iso
+                if rsi <= tf_state["sell_ref_high_rsi"] - rebound_sell:
+                    tf_state["sell_state"] = "WAIT_DIVERGENCE_SELL"
+                    if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 SELL: Lepattanás. Várjuk az új csúcsot...")
+            
+            elif sell_state == "WAIT_DIVERGENCE_SELL":
+                if high >= tf_state["sell_ref_high_price"] and (tf_state["sell_ref_high_rsi"] - rsi) >= rebound_sell:
+                    if tf_state.get("last_sell_alert_candle") != time_iso:
+                        if is_last_bar:
+                            subject = f"{tf} | Nasdaq ELADÁSI lehetőség - RSI Divergencia"
+                            body = build_email_body(tf, symbol, display_name, "SELL", time_str,
+                                                    {'t': tf_state["sell_ref_high_time"], 'p': tf_state["sell_ref_high_price"], 'r': tf_state["sell_ref_high_rsi"]},
+                                                    high, rsi, high - tf_state["sell_ref_high_price"], tf_state["sell_ref_high_rsi"] - rsi)
+                            send_email(subject, body)
+                            print(f"   [{tf}] {symbol} | 📧 SELL: Divergencia jelezve! Reset.")
+                        tf_state["last_sell_alert_candle"] = time_iso
+                        tf_state["sell_state"] = "IDLE"
+                elif high > tf_state["sell_ref_high_price"] and rsi > tf_state["sell_ref_high_rsi"]:
+                    tf_state["sell_ref_high_price"] = high
+                    tf_state["sell_ref_high_rsi"] = rsi
+                    tf_state["sell_ref_high_time"] = time_iso
+                    if is_last_bar: print(f"   [{tf}] {symbol} | 🔴 SELL: Új csúcs, de RSI is magasabb. Referencia frissítve.")
 
 # ============================================================
 # DIVERGENCIA LOGIKA — Warm-up + Élő feldolgozás
@@ -342,8 +368,7 @@ def check_symbol_tf(symbol, display_name, tf, state):
     sym_state = state.setdefault(symbol, {})
     tf_state  = sym_state.setdefault(tf, {})
 
-    # Warm-up: Végigmegyünk az elmúlt 200 gyertyán (vagy kevesebben, ha nincs annyi)
-    # Ez felépíti a valós állapotot anélkül, hogy a múltbeli eseményekre emailt küldene.
+    # Warm-up: Végigmegyünk az elmúlt 200 gyertyán
     start_idx = max(0, len(df) - 200)
     for i in range(start_idx, len(df)):
         row = df.iloc[i]
@@ -353,7 +378,7 @@ def check_symbol_tf(symbol, display_name, tf, state):
         
         process_bar(tf_state, symbol, display_name, tf, row["High"], row["Low"], row["Close"], row["RSI"], time_iso, time_str, is_last)
 
-    # Végül kiírjuk az aktuális (warm-up utáni) állapotot a konzolra
+    # Kiírjuk az aktuális (warm-up utáni) állapotot a konzolra
     last_rsi = float(df["RSI"].iloc[-1])
     last_close = float(df["Close"].iloc[-1])
     print(f"   [{tf}] {symbol} | Ár: {last_close:.2f} | RSI: {last_rsi:.2f} | Státusz: {tf_state['buy_state']} / {tf_state['sell_state']} | Adat kora: {data_age}")
