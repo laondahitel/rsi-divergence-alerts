@@ -14,10 +14,10 @@
       "last_sell_alert_candle": null
     },
     "H4": {
-      "buy_state": "IDLE",
-      "buy_ref_low_price": 0.0,
-      "buy_ref_low_rsi": 0.0,
-      "buy_ref_low_time": null,
+      "buy_state": "TRACKING_LOW",
+      "buy_ref_low_price": 29054.75,
+      "buy_ref_low_rsi": 36.48291025073248,
+      "buy_ref_low_time": "2026-10-26T02:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
       "sell_ref_high_rsi": 0.0,
