@@ -4,7 +4,7 @@
     "H1": {
       "buy_state": "IDLE",
       "buy_ref_low_price": 29022.0,
-      "buy_ref_low_rsi": 35.56959624220015,
+      "buy_ref_low_rsi": 35.547280211625136,
       "buy_ref_low_time": "2026-10-23T12:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
@@ -16,7 +16,7 @@
     "H4": {
       "buy_state": "IDLE",
       "buy_ref_low_price": 29268.75,
-      "buy_ref_low_rsi": 25.763219032202443,
+      "buy_ref_low_rsi": 25.742948116547055,
       "buy_ref_low_time": "2026-10-16T18:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 0.0,
