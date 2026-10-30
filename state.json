@@ -4,7 +4,7 @@
     "H1": {
       "buy_state": "IDLE",
       "buy_ref_low_price": 29022.0,
-      "buy_ref_low_rsi": 35.54728021162815,
+      "buy_ref_low_rsi": 35.54728021162096,
       "buy_ref_low_time": "2026-10-23T12:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 29943.5,
@@ -14,27 +14,27 @@
       "last_sell_alert_candle": "2026-10-15T22:00:00+00:00"
     },
     "H4": {
-      "buy_state": "IDLE",
-      "buy_ref_low_price": 29622.5,
-      "buy_ref_low_rsi": 18.167164568464912,
-      "buy_ref_low_time": "2026-10-15T10:00:00+00:00",
+      "buy_state": "TRACKING_LOW",
+      "buy_ref_low_price": 28833.25,
+      "buy_ref_low_rsi": 28.291864229547414,
+      "buy_ref_low_time": "2026-10-29T22:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31616.5,
-      "sell_ref_high_rsi": 76.12276536860011,
+      "sell_ref_high_rsi": 71.70831571212048,
       "sell_ref_high_time": "2026-10-06T14:00:00+00:00",
-      "last_buy_alert_candle": "2026-10-16T18:00:00+00:00",
-      "last_sell_alert_candle": "2026-10-05T10:00:00+00:00"
+      "last_buy_alert_candle": "2026-10-16T14:00:00+00:00",
+      "last_sell_alert_candle": "2026-10-02T14:00:00+00:00"
     },
     "D1": {
       "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 28987.0,
-      "buy_ref_low_rsi": 35.623717454689384,
+      "buy_ref_low_rsi": 35.62371844901429,
       "buy_ref_low_time": "2026-10-23T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31616.5,
-      "sell_ref_high_rsi": 69.30154055790334,
+      "sell_ref_high_rsi": 69.30154510082407,
       "sell_ref_high_time": "2026-10-06T00:00:00+00:00",
-      "last_buy_alert_candle": null,
+      "last_buy_alert_candle": "2026-01-14T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-01T00:00:00+00:00"
     },
     "W1": {
