@@ -4,7 +4,7 @@
     "H1": {
       "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 28232.75,
-      "buy_ref_low_rsi": 17.3085008771599,
+      "buy_ref_low_rsi": 17.255341868785138,
       "buy_ref_low_time": "2026-10-30T18:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 29943.5,
@@ -14,16 +14,16 @@
       "last_sell_alert_candle": "2026-10-15T22:00:00+00:00"
     },
     "H4": {
-      "buy_state": "TRACKING_LOW",
+      "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 28232.75,
-      "buy_ref_low_rsi": 29.0422016812541,
+      "buy_ref_low_rsi": 28.71340543419464,
       "buy_ref_low_time": "2026-10-30T18:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31616.5,
-      "sell_ref_high_rsi": 71.70831571212048,
+      "sell_ref_high_rsi": 86.62076673932917,
       "sell_ref_high_time": "2026-10-06T14:00:00+00:00",
       "last_buy_alert_candle": "2026-10-30T10:00:00+00:00",
-      "last_sell_alert_candle": "2026-10-02T14:00:00+00:00"
+      "last_sell_alert_candle": "2026-10-05T14:00:00+00:00"
     },
     "D1": {
       "buy_state": "WAIT_DIVERGENCE",
@@ -34,19 +34,19 @@
       "sell_ref_high_price": 31616.5,
       "sell_ref_high_rsi": 69.30153804628866,
       "sell_ref_high_time": "2026-10-06T00:00:00+00:00",
-      "last_buy_alert_candle": "2026-01-15T00:00:00+00:00",
+      "last_buy_alert_candle": "2026-01-16T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-01T00:00:00+00:00"
     },
     "W1": {
       "buy_state": "IDLE",
       "buy_ref_low_price": 23553.5,
-      "buy_ref_low_rsi": 44.201736401971694,
+      "buy_ref_low_rsi": 43.22733017860353,
       "buy_ref_low_time": "2026-04-05T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31336.75,
-      "sell_ref_high_rsi": 64.72755588018975,
+      "sell_ref_high_rsi": 64.42124270138919,
       "sell_ref_high_time": "2026-06-07T00:00:00+00:00",
-      "last_buy_alert_candle": null,
+      "last_buy_alert_candle": "2025-03-09T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-11T00:00:00+00:00"
     }
   }
