@@ -28,13 +28,13 @@
     "D1": {
       "buy_state": "TRACKING_LOW",
       "buy_ref_low_price": 26366.5,
-      "buy_ref_low_rsi": 30.593655522897137,
+      "buy_ref_low_rsi": 30.593654606715205,
       "buy_ref_low_time": "2026-11-06T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31616.5,
-      "sell_ref_high_rsi": 69.30154928455995,
+      "sell_ref_high_rsi": 69.30154377276062,
       "sell_ref_high_time": "2026-10-06T00:00:00+00:00",
-      "last_buy_alert_candle": "2026-11-03T00:00:00+00:00",
+      "last_buy_alert_candle": "2026-11-04T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-01T00:00:00+00:00"
     },
     "W1": {
@@ -46,7 +46,7 @@
       "sell_ref_high_price": 31336.75,
       "sell_ref_high_rsi": 64.42124270138919,
       "sell_ref_high_time": "2026-06-07T00:00:00+00:00",
-      "last_buy_alert_candle": "2025-03-09T00:00:00+00:00",
+      "last_buy_alert_candle": "2025-03-16T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-11T00:00:00+00:00"
     }
   }
