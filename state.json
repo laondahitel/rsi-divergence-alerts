@@ -4,19 +4,19 @@
     "H1": {
       "buy_state": "IDLE",
       "buy_ref_low_price": 26366.5,
-      "buy_ref_low_rsi": 24.10509407696874,
+      "buy_ref_low_rsi": 24.105094076970403,
       "buy_ref_low_time": "2026-11-05T23:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 28697.0,
       "sell_ref_high_rsi": 75.92414034330594,
       "sell_ref_high_time": "2026-11-11T18:00:00+00:00",
-      "last_buy_alert_candle": "2026-11-05T21:00:00+00:00",
+      "last_buy_alert_candle": "2026-11-05T20:00:00+00:00",
       "last_sell_alert_candle": "2026-10-15T22:00:00+00:00"
     },
     "H4": {
       "buy_state": "IDLE",
       "buy_ref_low_price": 26366.5,
-      "buy_ref_low_rsi": 32.84152590050692,
+      "buy_ref_low_rsi": 32.82863873308426,
       "buy_ref_low_time": "2026-11-05T22:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 30891.5,
