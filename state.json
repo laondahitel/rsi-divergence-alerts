@@ -28,11 +28,11 @@
     "D1": {
       "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 26366.5,
-      "buy_ref_low_rsi": 30.593654695999348,
+      "buy_ref_low_rsi": 30.593654493503593,
       "buy_ref_low_time": "2026-11-06T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31616.5,
-      "sell_ref_high_rsi": 69.30154599636158,
+      "sell_ref_high_rsi": 69.30154095325172,
       "sell_ref_high_time": "2026-10-06T00:00:00+00:00",
       "last_buy_alert_candle": "2026-11-03T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-01T00:00:00+00:00"
