@@ -28,17 +28,17 @@
     "D1": {
       "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 24976.5,
-      "buy_ref_low_rsi": 26.282755637187165,
+      "buy_ref_low_rsi": 26.282754933951153,
       "buy_ref_low_time": "2026-11-20T00:00:00+00:00",
       "sell_state": "IDLE",
       "sell_ref_high_price": 31616.5,
-      "sell_ref_high_rsi": 69.30155745790145,
+      "sell_ref_high_rsi": 69.30154962806583,
       "sell_ref_high_time": "2026-10-06T00:00:00+00:00",
-      "last_buy_alert_candle": "2026-11-03T00:00:00+00:00",
+      "last_buy_alert_candle": "2026-11-04T00:00:00+00:00",
       "last_sell_alert_candle": "2026-10-01T00:00:00+00:00"
     },
     "W1": {
-      "buy_state": "TRACKING_LOW",
+      "buy_state": "WAIT_DIVERGENCE",
       "buy_ref_low_price": 26366.5,
       "buy_ref_low_rsi": 37.688485933342506,
       "buy_ref_low_time": "2026-11-08T00:00:00+00:00",
